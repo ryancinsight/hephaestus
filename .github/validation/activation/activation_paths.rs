@@ -2,13 +2,13 @@
 //!
 //! Device mode requires prior root authorization and independent harness review.
 //! Correctness failures remain failures even when an old baseline is timed.
-
 use hephaestus_core::{BlockWidth, UnaryExpr, UnaryValue, Wgsl};
 use hephaestus_wgpu::{
     ComputeDevice, GeluGradOp, GeluOp, GeluTanhGradOp, WgpuDevice, unary_elementwise_into,
 };
+use std::io::{self, LineWriter, Write};
+use std::process::ExitCode;
 use std::time::{Duration, Instant};
-
 const SIZES: [usize; 2] = [1 << 16, 1 << 20];
 const SEED_LEN: u16 = 4096;
 const WARMUPS: usize = 2;
@@ -19,7 +19,6 @@ const REVISION: &str = env!("ACTIVATION_SOURCE_REVISION");
 const EXPRESSION_DIGEST: &str = env!("ACTIVATION_EXPRESSION_SHA256");
 const HARNESS_DIGEST: &str = env!("ACTIVATION_HARNESS_SHA256");
 const VALIDATION_HEAD: &str = env!("ACTIVATION_VALIDATION_HEAD");
-
 const FAILURE_CLASSES: [&str; 5] = [
     "nan",
     "infinite",
@@ -27,21 +26,18 @@ const FAILURE_CLASSES: [&str; 5] = [
     "finite_relative",
     "finite_absolute",
 ];
-
 #[derive(Clone, Copy, Default)]
 struct SeedFailures {
     count: [usize; 5],
     first_bits: [u32; 5],
     max_ulp: [f64; 5],
 }
-
 #[derive(Clone, Copy, Debug)]
 enum Accuracy {
     Gelu,
     GeluGrad,
     GeluTanhGrad,
 }
-
 impl Accuracy {
     fn acceptance(self, x: f32, band: &str) -> (f64, Option<f64>) {
         if band == "finite-saturation" {
@@ -92,12 +88,10 @@ impl Accuracy {
         }
     }
 }
-
 struct Dataset {
     name: &'static str,
     seed: Vec<f32>,
 }
-
 fn ranged(name: &'static str, lo: f32, hi: f32, edges: &[f32]) -> Dataset {
     let mut seed: Vec<_> = (0..SEED_LEN)
         .map(|i| lo + (hi - lo) * (f32::from(i) / f32::from(SEED_LEN - 1)))
@@ -105,7 +99,6 @@ fn ranged(name: &'static str, lo: f32, hi: f32, edges: &[f32]) -> Dataset {
     seed.extend_from_slice(edges);
     Dataset { name, seed }
 }
-
 fn saturation() -> Dataset {
     let mut seed = Vec::new();
     for edge in [20.0_f32, 40.0_f32] {
@@ -190,13 +183,14 @@ fn ulps(got: f32, reference: f64) -> f64 {
 }
 
 fn check(
+    output: &mut impl Write,
     values: &[f32],
     dataset: &Dataset,
     references: &[f64],
     accuracy: Accuracy,
     op: &str,
     phase: &str,
-) -> usize {
+) -> io::Result<usize> {
     let mut failures = 0_usize;
     let mut subnormal_reference = 0_usize;
     let mut max_ulp = 0.0_f64;
@@ -242,12 +236,13 @@ fn check(
             detail.count[kind] += 1;
             detail.max_ulp[kind] = detail.max_ulp[kind].max(error);
             if failures == 0 {
-                println!(
+                writeln!(
+                    output,
                     "FIRST_FAILURE\t{op}\t{}\t{}\t{phase}\t{x:?}\t0x{:08x}\t{got:?}\t{expected:?}\t{error:?}",
                     dataset.name,
                     values.len(),
                     x.to_bits()
-                );
+                )?;
             }
             failures += 1;
         }
@@ -255,7 +250,8 @@ fn check(
     for (seed_index, detail) in details.iter().enumerate() {
         for (kind, class) in FAILURE_CLASSES.iter().enumerate() {
             if detail.count[kind] != 0 {
-                println!(
+                writeln!(
+                    output,
                     "FAILURE_DETAIL\t{op}\t{}\t{}\t{phase}\t{}\t{class}\t{}\t{}\t{}\t{:?}",
                     dataset.name,
                     values.len(),
@@ -264,16 +260,17 @@ fn check(
                     detail.first_bits[kind],
                     references[seed_index].to_bits(),
                     detail.max_ulp[kind]
-                );
+                )?;
             }
         }
     }
-    println!(
+    writeln!(
+        output,
         "CHECK\t{op}\t{}\t{}\t{phase}\t{failures}\t{max_ulp:?}\t{max_abs:?}\t{subnormal_reference}\t{checksum}",
         dataset.name,
         values.len()
-    );
-    failures
+    )?;
+    Ok(failures)
 }
 
 fn wait(device: &WgpuDevice) {
@@ -287,13 +284,14 @@ fn wait(device: &WgpuDevice) {
 }
 
 fn run_operation<Op: UnaryExpr<Wgsl> + UnaryValue>(
+    writer: &mut impl Write,
     device: &WgpuDevice,
     op: &str,
     accuracy: Accuracy,
-) -> usize {
+) -> io::Result<usize> {
     let mut failures = 0;
     for dataset in datasets(accuracy) {
-        let references: Vec<_> = dataset
+        let refs: Vec<_> = dataset
             .seed
             .iter()
             .map(|&x| Op::apply::<f64>(f64::from(x)))
@@ -315,7 +313,7 @@ fn run_operation<Op: UnaryExpr<Wgsl> + UnaryValue>(
             device
                 .download(&output, &mut downloaded)
                 .expect("activation benchmark precheck download");
-            failures += check(&downloaded, &dataset, &references, accuracy, op, "before");
+            failures += check(writer, &downloaded, &dataset, &refs, accuracy, op, "before")?;
             for sample in 0..SAMPLES {
                 wait(device);
                 let start = Instant::now();
@@ -325,22 +323,28 @@ fn run_operation<Op: UnaryExpr<Wgsl> + UnaryValue>(
                 }
                 wait(device);
                 let elapsed_ns = start.elapsed().as_nanos();
-                println!(
+                writeln!(
+                    writer,
                     "TIMING\t{op}\t{}\t{len}\t{sample}\t{BATCH}\t{elapsed_ns}",
                     dataset.name
-                );
+                )?;
             }
             device
                 .download(&output, &mut downloaded)
                 .expect("activation benchmark postcheck download");
-            failures += check(&downloaded, &dataset, &references, accuracy, op, "after");
+            failures += check(writer, &downloaded, &dataset, &refs, accuracy, op, "after")?;
         }
     }
-    failures
+    Ok(failures)
 }
 
-fn manifest<Op: UnaryExpr<Wgsl> + UnaryValue>(op: &str, accuracy: Accuracy, include_inputs: bool) {
-    println!("EXPR\t{op}\t{:?}", Op::EXPR);
+fn manifest<Op: UnaryExpr<Wgsl> + UnaryValue>(
+    output: &mut impl Write,
+    op: &str,
+    accuracy: Accuracy,
+    include_inputs: bool,
+) -> io::Result<()> {
+    writeln!(output, "EXPR\t{op}\t{:?}", Op::EXPR)?;
     for dataset in datasets(accuracy) {
         let mut input_checksum = 0_u64;
         let mut reference_checksum = 0_u64;
@@ -350,24 +354,27 @@ fn manifest<Op: UnaryExpr<Wgsl> + UnaryValue>(op: &str, accuracy: Accuracy, incl
             reference_checksum = reference_checksum.wrapping_add(reference.to_bits());
             if include_inputs {
                 let (bound, absolute) = accuracy.acceptance(x, dataset.name);
-                println!(
+                writeln!(
+                    output,
                     "INPUT\t{op}\t{}\t{index}\t{}\t{}\t{bound:?}\t{}",
                     dataset.name,
                     x.to_bits(),
                     reference.to_bits(),
                     absolute.map_or_else(|| "none".to_owned(), |v| v.to_string())
-                );
+                )?;
             }
         }
-        println!(
+        writeln!(
+            output,
             "FIXTURE\t{op}\t{}\t{}\t{input_checksum}\t{reference_checksum}",
             dataset.name,
             dataset.seed.len()
-        );
+        )?;
     }
+    Ok(())
 }
 
-fn main() {
+fn protocol(output: &mut impl Write, errors: &mut impl Write) -> io::Result<u8> {
     let run_device = std::env::args().any(|argument| argument == "--run-device");
     assert_eq!(
         Accuracy::Gelu.acceptance(20.0, "finite-saturation"),
@@ -397,21 +404,33 @@ fn main() {
     assert_eq!(ulps(1.0_f32.next_up(), 1.0), 1.0);
     assert_eq!(ulps(f32::NAN, 1.0), f64::INFINITY);
     assert_eq!(ulps(0.0, f64::from(f32::MIN_POSITIVE)), 8388608.0);
-    println!("META\trevision\t{REVISION}");
-    println!("META\texpression_sha256\t{EXPRESSION_DIGEST}");
-    println!("META\tharness_sha256\t{HARNESS_DIGEST}");
-    println!("META\tvalidation_head\t{VALIDATION_HEAD}");
-    println!(
+    writeln!(output, "META\trevision\t{REVISION}")?;
+    writeln!(output, "META\texpression_sha256\t{EXPRESSION_DIGEST}")?;
+    writeln!(output, "META\tharness_sha256\t{HARNESS_DIGEST}")?;
+    writeln!(output, "META\tvalidation_head\t{VALIDATION_HEAD}")?;
+    writeln!(
+        output,
         "META\ttiming_scope\tpublic dispatch plus device completion; no upload/readback/compilation"
-    );
-    println!("META\tsizes\t{SIZES:?}");
-    println!("META\twarmups_samples_batch\t{WARMUPS},{SAMPLES},{BATCH}");
-    manifest::<GeluOp>("GeluOp", Accuracy::Gelu, !run_device);
-    manifest::<GeluGradOp>("GeluGradOp", Accuracy::GeluGrad, !run_device);
-    manifest::<GeluTanhGradOp>("GeluTanhGradOp", Accuracy::GeluTanhGrad, !run_device);
+    )?;
+    writeln!(output, "META\tsizes\t{SIZES:?}")?;
+    writeln!(
+        output,
+        "META\twarmups_samples_batch\t{WARMUPS},{SAMPLES},{BATCH}"
+    )?;
+    manifest::<GeluOp>(output, "GeluOp", Accuracy::Gelu, !run_device)?;
+    manifest::<GeluGradOp>(output, "GeluGradOp", Accuracy::GeluGrad, !run_device)?;
+    manifest::<GeluTanhGradOp>(
+        output,
+        "GeluTanhGradOp",
+        Accuracy::GeluTanhGrad,
+        !run_device,
+    )?;
     if !run_device {
-        println!("META\tstatus\tCPU_MANIFEST_ONLY_NO_DEVICE_ACQUISITION");
-        return;
+        writeln!(
+            output,
+            "META\tstatus\tCPU_MANIFEST_ONLY_NO_DEVICE_ACQUISITION"
+        )?;
+        return Ok(0);
     }
     assert!(
         std::env::var("GITHUB_ACTIONS").as_deref() == Ok("true")
@@ -430,18 +449,19 @@ fn main() {
     let device = match WgpuDevice::try_metal("hephaestus-activation-performance") {
         Ok(device) => device,
         Err(error) => {
-            eprintln!(
+            writeln!(
+                errors,
                 "ACQUISITION_FAILURE\t{:?}\t{:?}",
                 acquisition.elapsed(),
                 error
-            );
-            std::process::exit(2);
+            )?;
+            return Ok(2);
         }
     };
-    println!("META\tadapter\t{:?}", device.adapter_info());
-    println!("META\tfeatures\t{:?}", device.features());
-    println!("META\tlimits\t{:?}", device.limits());
-    println!("META\tdevice_limits\t{:?}", device.device_limits());
+    writeln!(output, "META\tadapter\t{:?}", device.adapter_info())?;
+    writeln!(output, "META\tfeatures\t{:?}", device.features())?;
+    writeln!(output, "META\tlimits\t{:?}", device.limits())?;
+    writeln!(output, "META\tdevice_limits\t{:?}", device.device_limits())?;
     assert!(
         matches!(
             device
@@ -454,11 +474,27 @@ fn main() {
         ),
         "only an identified physical Metal adapter is accepted; no alternate route"
     );
-    let mut failures = run_operation::<GeluOp>(&device, "GeluOp", Accuracy::Gelu);
-    failures += run_operation::<GeluGradOp>(&device, "GeluGradOp", Accuracy::GeluGrad);
-    failures += run_operation::<GeluTanhGradOp>(&device, "GeluTanhGradOp", Accuracy::GeluTanhGrad);
-    println!("FINAL\tcomputed_value_failures\t{failures}");
-    if failures != 0 {
-        std::process::exit(1);
+    let mut failures = run_operation::<GeluOp>(output, &device, "GeluOp", Accuracy::Gelu)?;
+    failures += run_operation::<GeluGradOp>(output, &device, "GeluGradOp", Accuracy::GeluGrad)?;
+    failures +=
+        run_operation::<GeluTanhGradOp>(output, &device, "GeluTanhGradOp", Accuracy::GeluTanhGrad)?;
+    writeln!(output, "FINAL\tcomputed_value_failures\t{failures}")?;
+    Ok(u8::from(failures != 0))
+}
+
+fn main() -> ExitCode {
+    let mut output = LineWriter::new(io::stdout());
+    let mut errors = LineWriter::new(io::stderr());
+    let outcome = protocol(&mut output, &mut errors);
+    let output_flush = output.flush();
+    let error_flush = errors.flush();
+    let flushed = output_flush.and(error_flush);
+    match outcome.and_then(|code| flushed.map(|()| code)) {
+        Ok(code) => ExitCode::from(code),
+        Err(error) => {
+            let _ = writeln!(errors, "PROTOCOL_IO_FAILURE\t{error:?}");
+            let _ = errors.flush();
+            ExitCode::from(3)
+        }
     }
 }

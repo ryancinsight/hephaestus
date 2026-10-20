@@ -81,6 +81,11 @@ baseline correctness acceptance.
 
 ## Resources and evidence
 
+Machine records use explicit line-buffered I/O without retaining stream locks
+across device work. Write or flush failures exit 3, distinct from numerical
+failure 1 and acquisition failure 2; they cannot qualify as expected baseline
+failures.
+
 One case owns buffers at a time; the fixed maximum has at most 16 MiB logical
 host/input/output/readback f32 storage, plus under 1 MiB seed/reference/failure
 summaries. Driver/compiler/staging caches are additional. Child completion

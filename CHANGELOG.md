@@ -25,6 +25,9 @@
 
 ### Added
 
+- [patch] Emit validation protocol records through explicit line-buffered I/O.
+  Preserve record values and timing controls; write or flush failures use a
+  fatal status distinct from numerical failures and unavailable adapters.
 - [patch] Prepare a relocatable, PR-only matched activation comparison after
   the complete hosted Metal suite and exact-witness diagnostics. Preserve
   base/head source, compiler, adapter and raw timing identities on one VM,
