@@ -1,5 +1,16 @@
 # Changelog
 
+## [0.25.0] - Unreleased
+
+### Added
+
+- [minor] Implement the `EmbeddingOps` seam on CUDA, ROCm, and Metal:
+  `CudaEmbeddingOps`/`RocmEmbeddingOps` run native gather + scan-based
+  scatter-add kernels with the seam's error-flag discipline;
+  `MetalEmbeddingOps` forwards to the WGPU implementation. All three run
+  the five shared conformance clauses (gather, scatter-add, position-order
+  accumulation, both out-of-range rejections).
+
 ## [0.24.0] - Unreleased
 
 ### Changed

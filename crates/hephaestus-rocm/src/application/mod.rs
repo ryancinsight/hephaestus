@@ -32,6 +32,8 @@ pub mod dot_seam;
 pub mod elementwise;
 /// Device-neutral elementwise seam implementation.
 pub mod elementwise_seam;
+/// Device-neutral embedding-table seam implementation.
+pub mod embedding_seam;
 /// Three-dimensional fixed-scheme first-derivative sweep.
 pub mod fixed_fd;
 #[cfg(all(feature = "rocm", target_os = "linux"))]

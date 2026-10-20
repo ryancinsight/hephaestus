@@ -36,6 +36,7 @@ pub use application::elementwise::{
     unary_elementwise_into,
 };
 pub use application::elementwise_seam::MetalElementwiseOps;
+pub use application::embedding_seam::MetalEmbeddingOps;
 pub use application::full_reduction_seam::MetalFullReductionOps;
 pub use application::fusion::MetalFusionOps;
 pub use application::gather_seam::MetalGatherOps;

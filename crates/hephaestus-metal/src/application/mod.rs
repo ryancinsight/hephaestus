@@ -28,6 +28,8 @@ pub mod dot_seam;
 pub mod elementwise;
 /// Device-neutral elementwise seam implementation.
 pub mod elementwise_seam;
+/// Device-neutral embedding-table seam implementation.
+pub mod embedding_seam;
 /// Device-neutral full-reduction seam implementation.
 pub mod full_reduction_seam;
 /// Runtime-rank expression fusion implemented by the Metal provider.
