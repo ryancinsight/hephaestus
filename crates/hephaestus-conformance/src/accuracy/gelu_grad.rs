@@ -83,9 +83,13 @@ fn far_inputs() -> Vec<f32> {
             -7.0,  // far-band handoff (also covered by the mid sweep)
             -10.0, // deep tail interior
             -12.5, // WGSL flush floor: the last swept subnormal-free input
-            -13.0, // past the floor (CUDA/HIP only)
+            -12.6, -13.0, // past the floor (CUDA/HIP only)
         ],
     )
+}
+
+fn wgsl_inputs(inputs: &[f32]) -> Vec<f32> {
+    above_flush_floor(&without_subnormals(inputs), -12.5)
 }
 
 /// Sweep [`GeluGradOp`](hephaestus_core::GeluGradOp) on one backend.
@@ -119,10 +123,10 @@ where
     // dialects sweep them.
     let (main, root, mid, far) = if dialect == SweepDialect::Wgsl {
         (
-            above_flush_floor(&without_subnormals(&main), -12.5),
-            above_flush_floor(&without_subnormals(&root), -12.5),
-            above_flush_floor(&without_subnormals(&mid), -12.5),
-            above_flush_floor(&without_subnormals(&far), -12.5),
+            wgsl_inputs(&main),
+            wgsl_inputs(&root),
+            wgsl_inputs(&mid),
+            wgsl_inputs(&far),
         )
     } else {
         (main, root, mid, far)
@@ -137,4 +141,22 @@ where
     );
     assert_unary_sweep_within::<D, E, GeluGradOp>(device, ops, "gelu-grad-mid", &mid, mid_ulp);
     assert_unary_sweep_within::<D, E, GeluGradOp>(device, ops, "gelu-grad-far", &far, far_ulp);
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use hephaestus_core::UnaryValue;
+
+    #[test]
+    fn wgsl_sweep_keeps_directed_normal_gelu_gradient_tails() {
+        let inputs = wgsl_inputs(&far_inputs());
+        for x in [-12.6, -13.0] {
+            assert!(GeluGradOp::apply(f64::from(x)).abs() >= f64::from(f32::MIN_POSITIVE));
+            assert!(
+                inputs.contains(&x),
+                "normal GELU-gradient tail removed at {x}"
+            );
+        }
+    }
 }

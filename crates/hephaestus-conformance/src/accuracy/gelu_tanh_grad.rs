@@ -108,6 +108,24 @@ fn far_inputs() -> Vec<f32> {
     )
 }
 
+fn finite_saturation_inputs() -> [f32; 12] {
+    let edge = 20.0_f32;
+    [
+        -edge.next_up(),
+        -edge,
+        -edge.next_down(),
+        edge.next_down(),
+        edge,
+        edge.next_up(),
+        -1e20,
+        1e20,
+        -1e30,
+        1e30,
+        -f32::MAX,
+        f32::MAX,
+    ]
+}
+
 /// Sweep [`GeluTanhGradOp`](hephaestus_core::GeluTanhGradOp) on one backend.
 ///
 /// Bounds grade with the `|x|³` conditioning (the argument rounding is
@@ -176,4 +194,29 @@ where
         &far,
         far_ulp,
     );
+    // These finite controls bypass the intermediate-flush tail filter. Their
+    // correctly rounded f32 derivative is exactly zero or one.
+    assert_unary_sweep_within::<D, E, GeluTanhGradOp>(
+        device,
+        ops,
+        "gelu-tanh-grad-finite-saturation",
+        &finite_saturation_inputs(),
+        max_ulp,
+    );
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use eunomia::FloatElement;
+    use hephaestus_core::UnaryValue;
+
+    #[test]
+    fn finite_saturation_controls_have_rounded_reference_limits() {
+        for x in finite_saturation_inputs() {
+            let reference = GeluTanhGradOp::apply(f64::from(x));
+            let rounded = <f32 as FloatElement>::from_f64(reference);
+            assert_eq!(rounded, if x > 0.0 { 1.0 } else { 0.0 });
+        }
+    }
 }

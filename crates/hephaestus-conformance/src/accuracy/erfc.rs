@@ -62,12 +62,19 @@ fn far_inputs() -> Vec<f32> {
         10.5,
         512,
         &[
-            6.0,  // far-band handoff (also covered by the mid sweep)
-            8.3,  // approaching subnormal results
-            8.9,  // WGSL cap: results go subnormal past here
+            6.0, // far-band handoff (also covered by the mid sweep)
+            8.3, // approaching subnormal results
+            8.9, // WGSL cap: results go subnormal past here
+            9.0,
+            9.19,
+            9.194_549_f32.next_down(),
             10.0, // deep tail interior (CUDA/HIP only)
         ],
     )
+}
+
+fn wgsl_far_inputs(inputs: &[f32]) -> Vec<f32> {
+    below_cap(&without_subnormals(inputs), 8.9)
 }
 
 /// Sweep [`ErfcOp`](hephaestus_core::ErfcOp) on one backend.
@@ -125,7 +132,7 @@ where
         (
             without_subnormals(&main),
             without_subnormals(&mid),
-            below_cap(&without_subnormals(&far), 8.9),
+            wgsl_far_inputs(&far),
         )
     } else {
         (main, mid, far)
@@ -133,4 +140,22 @@ where
     assert_unary_sweep_within::<D, E, ErfcOp>(device, ops, "erfc", &main, max_ulp);
     assert_unary_sweep_within::<D, E, ErfcOp>(device, ops, "erfc-mid", &mid, mid_ulp);
     assert_unary_sweep_within::<D, E, ErfcOp>(device, ops, "erfc-far", &far, far_ulp);
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use hephaestus_core::UnaryValue;
+
+    #[test]
+    fn wgsl_sweep_keeps_directed_normal_erfc_tails() {
+        let inputs = wgsl_far_inputs(&far_inputs());
+        for x in [9.0, 9.19] {
+            assert!(ErfcOp::apply(f64::from(x)) >= f64::from(f32::MIN_POSITIVE));
+            assert!(inputs.contains(&x), "normal erfc tail removed at {x}");
+        }
+        assert!(inputs.iter().any(|x| x.is_nan()));
+        assert!(inputs.contains(&f32::INFINITY));
+        assert!(inputs.contains(&f32::NEG_INFINITY));
+    }
 }
