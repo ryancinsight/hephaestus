@@ -592,6 +592,8 @@ dependencies = [
  "hephaestus-core",
  "leto",
  "leto-ops",
+ "tracing",
+ "tracing-subscriber",
 ]
 
 [[package]]
