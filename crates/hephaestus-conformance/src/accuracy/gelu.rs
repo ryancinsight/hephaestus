@@ -174,7 +174,21 @@ mod tests {
     }
     #[test]
     fn wgsl_far_sweep_retains_unscaled_exponent_regressions_and_handoff() {
-        let inputs = wgsl_inputs(&far_inputs());
+        let _trace = super::super::runner::trace();
+        let _test = tracing::info_span!(
+            "gelu_far_regression",
+            contract = "unscaled_exponent_and_handoff_selection"
+        )
+        .entered();
+        let inputs = {
+            let _arrange = tracing::info_span!("arrange").entered();
+            far_inputs()
+        };
+        let selected = {
+            let _act = tracing::info_span!("act").entered();
+            wgsl_inputs(&inputs)
+        };
+        let _assert = tracing::info_span!("assert").entered();
         for bits in [
             0xc14f_e3f4,
             0xc149_05b3,
@@ -184,10 +198,13 @@ mod tests {
             0xc0e0_0000,
             0xc0e0_0001,
         ] {
-            assert!(
-                inputs.iter().any(|x| x.to_bits() == bits),
-                "normal GELU far regression removed: {bits:08x}"
+            let retained = selected.iter().any(|x| x.to_bits() == bits);
+            tracing::info!(
+                input_bits = bits,
+                retained,
+                "normal GELU far regression selection"
             );
+            assert!(retained, "normal GELU far regression removed: {bits:08x}");
         }
     }
 
