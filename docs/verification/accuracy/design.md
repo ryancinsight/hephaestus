@@ -133,7 +133,8 @@ rounding the shader argument excludes that one extra lane. The true erfc is
 subnormal from the next input. The Gaussian exp(-x*x/2) also becomes subnormal
 before the gradient's final-normal endpoint, at bits `0xc153765b`.
 
-For x < -13, let z = abs(x)/sqrt(2) and r = exp(z*z)*erfc(z).
+The a735 normal-tail correction uses x < -13. Let z = abs(x)/sqrt(2)
+and r = exp(z*z)*erfc(z).
 The implementation approximates r by t*exp(N(t)), where t = 1/(1+z/2)
 and N is the existing Numerical Recipes erfc exponent correction. One shared
 coefficient macro serves erfc and this scaled erfc; the emitted erfc
@@ -181,6 +182,41 @@ countermodels, not a proof of a newly allowed intrinsic profile. Full compiler
 reassociation/transcendental transformations remain unqualified. Eager WGSL
 selection adds tail work; actual performance is unmeasured. Independent review
 and required actual backend validation of this private delta remain pending.
+
+## Proposed GELU far-band correction (qualification pending)
+
+The retained hosted run `39520852311` reports the same four normal-result GELU
+far-band failures in base `6f4dd9b9` and former comparison head `9f7be898`:
+`0xc14fe3f4`, `0xc14905b3`, `0xc1446f7a` and `0xc13e0c2d`, at the unchanged
+256 ULP bound. All four are above -13 and use the old unscaled erfc branch.
+The fixed exp2-reduction source profile reproduces this failure class without
+matching exact device bits or identifying a runtime JIT mechanism. Rounding z
+before its quadratic exponent can amplify the input error; moving the original-x
+Gaussian outside that erfc exponent avoids that path.
+
+Proposed provider `838cf7abb156b21b521cdc9ef52b14833305cd17` selects the
+existing factored GELU expression for x < -7, its existing far-band boundary.
+GELU-gradient keeps x < -13 and its 512 scaling. Coefficients, other operators,
+C/HIP expressions, value references, scoring and every target remain unchanged.
+The four inputs and adjacent -7 controls are additive; no old fixture is removed.
+The production-only and validation-based proposals share all six published
+library sources and manifests. Validation retains its earlier exact-six
+fixtures and diagnostics.
+
+The renewed comparison pins provider tree `26e0a45c44f638ccdb02646297ac71dc9af8e623`
+and the retained source-expanded 24-row export map. The hosted full-library
+exporter must match that exact map before acquisition. Source-identity checks
+must reject any additional production delta. Existing base predicates and
+strict candidate rejection remain. Public #509 a735 is unchanged by this
+private preparation; the proposed #510 update carries new production source
+to obtain validation evidence, not release acceptance.
+
+Author CPU models cover the new far band and directed handoffs; independent
+source/model review and new actual backend/performance evidence remain required.
+Historical a735 round-toward-zero handoff observations remain preserved and
+cannot be transferred as unchanged outputs after this selector changes. New
+bounded CPU observations establish no portable contract, native fast-math NaN
+qualification, runtime JIT identity or physical GPU backing.
 
 ## Portable composition finding remains open
 

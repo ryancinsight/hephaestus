@@ -23,6 +23,13 @@
   typing, C/HIP expressions and every ULP/absolute target. CPU reference
   verification does not establish device, compiler or performance acceptance.
 
+- [patch] Propose extending the existing factored WGSL GELU path to its
+  -7 far-band boundary after four normal-result failures occur in both the
+  base and prior comparison head. Retain those inputs and -7 neighbors;
+  preserve the gradient's -13 handoff, coefficients, references and targets.
+  New exact-source backend/performance and affected package/API evidence
+  remain required; public #509 is unchanged by this private preparation.
+
 ### Added
 
 - [patch] Emit validation protocol records through explicit line-buffered I/O.

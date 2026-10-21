@@ -27,6 +27,14 @@
   review, actual backend execution and compiler/performance qualification of
   this private delta remain open. Portable-bound design stays separate; no
   tolerance increase resolves allowed-intrinsic countermodels.
+- Further far-band proposal: four retained normal GELU misses occur in both
+  base `6f4dd9b9` and former head `9f7be898` at the unchanged 256 ULP target.
+  Provider `838cf7ab`
+  selects the existing factored GELU expression below -7; gradient stays below
+  -13. Regression inputs and -7 neighbors are additive. Independent review,
+  actual backend/performance and affected package/API evidence remain required;
+  old receipts and failures are preserved, not transferred to this changed
+  selector. Public #509 a735 remains unchanged during private preparation.
 - The private observed-cohort proposal adds explicit six-witness fixtures and
   retained actual-value/source/lock/adapter diagnostics, preserving every target
   and production expression. Five selection guards fail on the base; SiLU -6

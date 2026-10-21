@@ -46,6 +46,11 @@ paths unchanged; this correction targets that current base. The
 - [ ] [patch] Independently review and qualify this private normal-tail delta
   on the required backends, including the final two normal-result inputs
   whose reference margins above MIN are smaller than 256 subnormal ULP.
+- [ ] [patch] Independently review and qualify proposed provider `838cf7ab`:
+  select the existing factored GELU expression below -7, retaining gradient's
+  -13 handoff, the four shared base/head failures from run `39520852311`,
+  additive regression/handoff controls, strict targets and prior history.
+  CPU models do not close renewed backend or matched performance requirements.
 - [ ] [patch] Resolve the six allowed-intrinsic countermodels through an
   owner/coordinator accuracy-contract decision and supporting proof or
   adapter/driver/compiler qualification. Preserve strict existing tests;

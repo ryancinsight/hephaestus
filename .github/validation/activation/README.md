@@ -2,12 +2,23 @@
 
 This validation-only helper compares actual baseline
 `6f4dd9b942d083a8183fc56c3502c8d8322277d1` with immutable product head
-`9f7be89890dc07eb00dcf2521871d9dd31f23f65`. The validation PR checkout (including
-GitHub's possible merge commit) is recorded separately. The comparison spec pins
-both trees, all eight exported operators in three dialects, and the unchanged
-228-package external lock graph. Only WGSL GELU, GELU-gradient and tanh-GELU-gradient
-expressions differ. The final product head has the same production expressions
-as private `a735c608dd686bc665ef48ac329aca4872b8508f`.
+`838cf7abb156b21b521cdc9ef52b14833305cd17`, tree
+`26e0a45c44f638ccdb02646297ac71dc9af8e623`. This proposed provider is an
+ancestor of the validation revision so the normal automatic route can retrieve
+its exact object; the public #509 head remains `a735c608` during preparation.
+The validation PR checkout, including GitHub's possible merge commit, is
+recorded separately. The spec pins both trees, all eight exported operators
+in three dialects, and the unchanged 228-package external lock graph. Relative
+to the base, only WGSL GELU, GELU-gradient and tanh-GELU-gradient expressions
+differ. Relative to former head `9f7be898`, only GELU's existing factored
+branch selector changes from `x < -13` to `x < -7`; the gradient stays at -13.
+
+The previous hosted comparison retains four GELU far-band failures shared by
+base `6f4dd9b9` and head `9f7be898`. The new source proposal preserves those
+failures and adds all four inputs and -7 handoff neighbors to conformance.
+It changes no benchmark, baseline predicate, numerical target or budget.
+New full-suite, exact-six and matched comparison evidence is required; CPU
+source models and preparation supply no new device or performance result.
 
 The existing Metal job appends this phase after all mandatory suites and the six
 focused intrinsic witnesses succeed. Both products build on that VM with installed
