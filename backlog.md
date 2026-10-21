@@ -11,12 +11,10 @@
   -13, scales the gradient Gaussian by 512 and selects by final reference
   normality. Directed last-normal controls preserve the existing 256 ULP
   bound. Independent review and actual backend qualification remain open.
-- Far-band proposal: retained run `39520852311` has four normal GELU misses
-  shared by base `6f4dd9b9` and former comparison `9f7be898`. Private provider
-  `838cf7ab` selects the existing factored GELU path below -7, keeping gradient
-  below -13, and adds the four inputs and handoff neighbors. Independent
-  review, actual backend/performance and affected package/API evidence remain
-  open. The renewed #510 comparison is validation work; #509 a735 is unchanged.
+- Far-band proposal: retained run `39520852311` has four normal GELU misses shared by base `6f4dd9b9` and former comparison `9f7be898`.
+  Private provider `838cf7ab` selects the existing factored GELU path below -7, keeping gradient below -13, and adds the four inputs and handoff neighbors.
+  Independent review, actual backend/performance and affected package/API evidence remain open.
+  The renewed #510 comparison is validation work; #509 a735 is unchanged.
 - Finding 2: WGSL GELU-tanh gradient overflows on finite huge inputs despite
   outer selects. Bound operands before eager evaluation, use a nonoverflowing
   sigmoid product, and retain saturation/handoff/ordinary controls under
