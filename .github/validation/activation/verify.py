@@ -158,6 +158,48 @@ def field_value(line, marker):
     return line[start:end]
 
 
+
+def adapter_identity(value):
+    """Canonical Rust Debug identity; only Option::Some changes representation."""
+    require(isinstance(value, str), 'malformed adapter identity')
+    if value.startswith('Some('):
+        require(value.endswith(')'), 'malformed adapter identity')
+        value = value[5:-1]
+    require(value.startswith('AdapterInfo {') and value.endswith('}'), 'malformed adapter identity')
+    stack, quoted, escaped = [], False, False
+    opening = len('AdapterInfo ')
+    for index in range(opening, len(value)):
+        char = value[index]
+        if quoted:
+            if escaped:
+                escaped = False
+            elif char == '\\':
+                escaped = True
+            elif char == '"':
+                quoted = False
+        elif char == '"':
+            quoted = True
+        elif char in '({[':
+            stack.append(char)
+        elif char in ')}]':
+            require(stack and stack.pop() == {')': '(', '}': '{', ']': '['}[char], 'malformed adapter identity')
+            require(stack or index == len(value) - 1, 'malformed adapter identity')
+    require(not quoted and not stack, 'malformed adapter identity')
+    return value
+
+
+def cohort_identity(meta, diagnostic=None):
+    identity = {key: meta.get(key) for key in ['adapter', 'features', 'device_limits']}
+    require(all(identity.values()), 'missing device identity')
+    adapter = adapter_identity(identity['adapter'])
+    require('backend: Metal' in adapter and
+            any('device_type: ' + item in adapter for item in ['IntegratedGpu', 'DiscreteGpu']), 'not identified Metal adapter type; physical Metal is unverified')
+    if diagnostic is not None:
+        expected = dict(diagnostic, adapter=adapter_identity(diagnostic.get('adapter')))
+        require(dict(identity, adapter=adapter) == expected, 'witness/benchmark cohort mismatch')
+    return identity
+
+
 def diagnostic_identity(path):
     identities = []
     witnesses = 0
@@ -178,6 +220,7 @@ def diagnostic_identity(path):
                 require(math.isfinite(error) and error <= bound, 'focused witness exceeds unchanged target')
                 witnesses += 1
     require(len(identities) == 1 and witnesses == 6, 'missing exact diagnostic identity/six results')
+    adapter_identity(identities[0]['adapter'])
     return identities[0]
 
 
@@ -257,12 +300,7 @@ def measured_run(path, cpu, spec, cohort, predicates, diagnostic=None):
         maximum = sum(1 + (length - 1 - row[0]) // len(rows) for row in rows if row[1] == bits and row[0] < length)
         require(count <= maximum, 'per-input failures exceed actual repeated inputs')
     require(cohort == 'base' or total_final == 0, 'candidate numerical failure')
-    identity = {key: meta.get(key) for key in ['adapter', 'features', 'device_limits']}
-    require(all(identity.values()), 'missing device identity')
-    require('backend: Metal' in identity['adapter'] and
-            any('device_type: ' + item in identity['adapter'] for item in ['IntegratedGpu', 'DiscreteGpu']), 'not identified physical Metal')
-    if diagnostic is not None:
-        require(identity == diagnostic, 'witness/benchmark cohort mismatch')
+    identity = cohort_identity(meta, diagnostic)
     return {'identity': identity, 'failures': total_final, 'timings': timings}
 
 
