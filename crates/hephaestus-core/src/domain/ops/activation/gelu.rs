@@ -22,9 +22,11 @@ macro_rules! wgsl_gelu_erfc_expr {
     };
 }
 
-// Below -13, erfc can be subnormal while the final GELU is normal.
-// Factor out exp(-x*x/2) using the same Chebyshev correction as erfc.
-// This Gaussian remains normal throughout the normal-result GELU tail.
+// In the existing far band x < -7, rounding x/sqrt(2) before squaring
+// amplifies argument error in the erfc exponent. Factor out exp(-x*x/2)
+// using the same Chebyshev correction, so that rounded argument only enters
+// the slowly varying correction. The Gaussian also stays normal throughout
+// the normal-result GELU tail when the erfc intermediate becomes subnormal.
 macro_rules! wgsl_gelu_tail_expr {
     () => {
         concat!(
@@ -60,7 +62,7 @@ impl UnaryExpr<Wgsl> for GeluOp {
         wgsl_gelu_erfc_expr!(),
         "), ",
         wgsl_gelu_tail_expr!(),
-        ", (x) < -13.0), -0.0, (x) < -3.402823466e+38)"
+        ", (x) < -7.0), -0.0, (x) < -3.402823466e+38)"
     );
     const SUPPORTS_F64: bool = false;
 }
