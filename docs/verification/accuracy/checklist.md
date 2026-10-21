@@ -46,11 +46,19 @@ paths unchanged; this correction targets that current base. The
 - [ ] [patch] Independently review and qualify this private normal-tail delta
   on the required backends, including the final two normal-result inputs
   whose reference margins above MIN are smaller than 256 subnormal ULP.
-- [ ] [patch] Independently review and qualify proposed provider `838cf7ab`:
-  select the existing factored GELU expression below -7, retaining gradient's
-  -13 handoff, the four shared base/head failures from run `39520852311`,
-  additive regression/handoff controls, strict targets and prior history.
-  CPU models do not close renewed backend or matched performance requirements.
+- [x] [patch] Retain independent source/CPU review of provider `838cf7ab` and
+  independently accepted observed numerical results for exact5e hosted Metal
+  run `39527890349`: full113/219 overlapping suites, six witnesses and complete
+  BHHB; preserve all four earlier failures, inputs and -7 controls. Source-
+  equivalent package/five Mac/six Linux API results remain scoped to838.
+- [ ] [patch] Resolve P1 performance: GELU tail1M pooled H/B1.35333 in that
+  complete one-VM cohort. Preserve raw distributions and physical/JIT/portable
+  limitations; observed numerical success supplies no performance acceptance.
+- [ ] [patch] Independently review new selected-exp sharing providerc0aa and
+  its exact validation composition. Raw Naga/MSL exp4→4 and distinct inputs3→2
+  support a CSE hypothesis only; renew affected package/API/backend checks and
+  matched automatic measurements before accepting this changed source. Keep
+  coefficients, selected arithmetic, targets, predicates and budgets unchanged.
 - [ ] [patch] Resolve the six allowed-intrinsic countermodels through an
   owner/coordinator accuracy-contract decision and supporting proof or
   adapter/driver/compiler qualification. Preserve strict existing tests;
@@ -61,7 +69,7 @@ paths unchanged; this correction targets that current base. The
   owner/coordinator acceptance decision under unchanged targets.
 - [ ] [patch] Revalidate all applicable package/API/backend gates and the
   current consumer graph before merge, publication or consumer admission.
-- [ ] [patch] Independently review and execute the validation-only hosted
+- [ ] [patch] Independently review and execute the new-provider validation-only
   Metal comparison after the complete mandatory suite and exact-six
   diagnostics. Bind immutable base/final comparison source, real output
   checks, compiler/adapter identities, raw timing/noise and metadata limits

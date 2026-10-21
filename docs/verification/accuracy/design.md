@@ -183,7 +183,7 @@ reassociation/transcendental transformations remain unqualified. Eager WGSL
 selection adds tail work; actual performance is unmeasured. Independent review
 and required actual backend validation of this private delta remain pending.
 
-## Proposed GELU far-band correction (qualification pending)
+## GELU far-band correction and recorded cohort limits
 
 The retained hosted run `39520852311` reports the same four normal-result GELU
 far-band failures in base `6f4dd9b9` and former comparison head `9f7be898`:
@@ -203,20 +203,51 @@ The production-only and validation-based proposals share all six published
 library sources and manifests. Validation retains its earlier exact-six
 fixtures and diagnostics.
 
-The renewed comparison pins provider tree `26e0a45c44f638ccdb02646297ac71dc9af8e623`
-and the retained source-expanded 24-row export map. The hosted full-library
-exporter must match that exact map before acquisition. Source-identity checks
-must reject any additional production delta. Existing base predicates and
-strict candidate rejection remain. Public #509 a735 is unchanged by this
-private preparation; the proposed #510 update carries new production source
-to obtain validation evidence, not release acceptance.
+The exact5e comparison of provider838 in hosted Metal run `39527890349`
+completed full mandatory suites, six witnesses and base/head/head/base. Both
+candidates have zero failures under the existing scorer; all four retained
+GELU inputs pass. Independent review accepts this observed numerical cohort.
+The source-expanded 24-row export digest was confirmed by the actual full
+library exporter. Fixed372 baseline predicates preserve baseline failures;
+strict candidate rejection, references and every target remain unchanged.
 
-Author CPU models cover the new far band and directed handoffs; independent
-source/model review and new actual backend/performance evidence remain required.
-Historical a735 round-toward-zero handoff observations remain preserved and
-cannot be transferred as unchanged outputs after this selector changes. New
-bounded CPU observations establish no portable contract, native fast-math NaN
-qualification, runtime JIT identity or physical GPU backing.
+P1 performance acceptance remains open: GELU tail1M pooled batch medians are
+2.175250 ms base and2.943833 ms head (H/B1.3533308815). Both head process
+medians exceed both baseline medians; same-case base drift is5.28% and head
+variation1.52%. The complete6f→838 correction set is measured on one
+paravirtual VM, so neither universal effects nor attribution to the -7
+selector alone follows. Physical backing and native JIT identity are unknown.
+The source-equivalent838 package, five Mac and six Linux registry API evidence
+are distinct from numerical/performance qualification and from any new source.
+
+### Selected-exp sharing proposal (new cohort unmeasured)
+
+Immutable provider `c0aa1bdc9a91f876a198700235ed2b2e6197d0db` and its explicit
+validation ancestry retain the -7 selector, gradient's -13 handoff, correction,
+coefficients and product grouping. Let c=(x<-7), r be the old regular exponent
+argument and g=-(0.5*x*x). Both GELU branches use the repeated pure expression
+exp(select(r,g,c)); the existing correction exponential stays separate. At
+each selector state the strict selected arithmetic tree matches838. The
+other23 operator/dialect exports remain byte-identical; only WGSL GeluOp
+changes. This describes the private proposal, whose exact source review is
+separate from this documentation/pin preparation.
+
+The retained CPU models report identical selected outputs under their explicit
+rounding/intrinsic/FTZ profiles. They do not prove identity under unrestricted
+compiler fusion, reassociation or portable intrinsic errors. Pure Naga30.0.1
+and MSL retain four raw exp nodes/calls in both revisions; distinct exp inputs
+decrease3→2. This offers downstream common-subexpression elimination, not
+actual instruction elimination, measured speedup or runtime JIT evidence.
+
+Only comparison head revision, tree and actual24-row export digest change.
+Immutable base6f, external graph, fixed372 map, fixtures, scoring, statistics,
+workload, workflows and budgets stay unchanged. New exact source acceptance,
+affected package/API validation, required backend suites and matched automatic
+measurements remain prerequisites. No old result transfers to c0aa. Public
+#509 a735 remains unchanged; #510 supplies validation evidence only. Historical
+RTZ handoff observations, incomplete campaigns and earlier failures remain
+retained. Portable/native-fast/physical/consumer/FFI/Python/service/Harmonia
+holds remain separate; Coeus Miri is DEFERRED_UNVERIFIED.
 
 ## Portable composition finding remains open
 

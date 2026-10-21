@@ -27,14 +27,21 @@
   review, actual backend execution and compiler/performance qualification of
   this private delta remain open. Portable-bound design stays separate; no
   tolerance increase resolves allowed-intrinsic countermodels.
-- Further far-band proposal: four retained normal GELU misses occur in both
-  base `6f4dd9b9` and former head `9f7be898` at the unchanged 256 ULP target.
-  Provider `838cf7ab`
-  selects the existing factored GELU expression below -7; gradient stays below
-  -13. Regression inputs and -7 neighbors are additive. Independent review,
-  actual backend/performance and affected package/API evidence remain required;
-  old receipts and failures are preserved, not transferred to this changed
-  selector. Public #509 a735 remains unchanged during private preparation.
+- Far-band source provider `838cf7ab` selects the existing factored GELU path
+  below -7, with the gradient unchanged below -13. Run `39520852311`'s four
+  normal-result misses and -7 neighbors remain as regressions. Exact5e hosted
+  run `39527890349` has independently accepted observed numerical results,
+  complete BHHB measurements and P1 performance hold: GELU tail1M pooled H/B
+  1.35333. The one-VM Apple Paravirtual cohort does not identify physical
+  backing/native JIT or establish portable guarantees. Source-equivalent838
+  package and five Mac/six Linux API evidence do not transfer to a new source.
+- New private provider `c0aa1bdc` shares the selected GELU exp argument without
+  changing its selector, coefficients or strict modeled selected arithmetic.
+  Raw Naga/MSL exp count remains4→4; distinct inputs fall3→2. Downstream CSE
+  is a hypothesis, not measured speedup or JIT proof. New source review,
+  affected package/API/backend and matched performance evidence remain open.
+  Public #509 a735 stays unchanged; #510 is validation only. Old failures,
+  predicates, numerical targets and budgets remain intact.
 - The private observed-cohort proposal adds explicit six-witness fixtures and
   retained actual-value/source/lock/adapter diagnostics, preserving every target
   and production expression. Five selection guards fail on the base; SiLU -6

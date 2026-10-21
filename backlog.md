@@ -11,10 +11,10 @@
   -13, scales the gradient Gaussian by 512 and selects by final reference
   normality. Directed last-normal controls preserve the existing 256 ULP
   bound. Independent review and actual backend qualification remain open.
-- Far-band proposal: retained run `39520852311` has four normal GELU misses shared by base `6f4dd9b9` and former comparison `9f7be898`.
-  Private provider `838cf7ab` selects the existing factored GELU path below -7, keeping gradient below -13, and adds the four inputs and handoff neighbors.
-  Independent review, actual backend/performance and affected package/API evidence remain open.
-  The renewed #510 comparison is validation work; #509 a735 is unchanged.
+- Far-band history: run `39520852311` retains four normal GELU misses shared by base `6f4dd9b9` and former head `9f7be898`; provider `838cf7ab` selects the existing factored path below -7, keeps gradient below -13, and adds all four inputs and handoff neighbors.
+  Exact5e/provider838 has independently accepted observed Metal numerical results in run `39527890349` and package/five Mac/six Linux API evidence; P1 performance remains held (GELU tail1M pooled H/B1.35333), with one-VM/JIT/physical/portable limits.
+  New provider `c0aa1bdc` shares selected exp inputs while preserving strict modeled arithmetic: raw Naga/MSL exp4→4, distinct inputs3→2; downstream CSE is a hypothesis, with no measured speedup or JIT proof.
+  #510 remains validation work and public #509 a735 is unchanged; fresh exact review/backend/performance/package/API gates apply to the new source, while consumer/FFI/Python/service/Harmonia holds and Coeus Miri DEFERRED_UNVERIFIED remain.
 - Finding 2: WGSL GELU-tanh gradient overflows on finite huge inputs despite
   outer selects. Bound operands before eager evaluation, use a nonoverflowing
   sigmoid product, and retain saturation/handoff/ordinary controls under

@@ -23,12 +23,18 @@
   typing, C/HIP expressions and every ULP/absolute target. CPU reference
   verification does not establish device, compiler or performance acceptance.
 
-- [patch] Propose extending the existing factored WGSL GELU path to its
-  -7 far-band boundary after four normal-result failures occur in both the
-  base and prior comparison head. Retain those inputs and -7 neighbors;
-  preserve the gradient's -13 handoff, coefficients, references and targets.
-  New exact-source backend/performance and affected package/API evidence
-  remain required; public #509 is unchanged by this private preparation.
+- [patch] Extend the existing factored WGSL GELU path to its -7 far-band
+  boundary after four normal-result failures occur in base and prior head.
+  Retain those inputs, -7 neighbors and the gradient's -13 handoff. Exact5e/
+  provider838 hosted run39527890349 has accepted observed numerical results;
+  matched performance remains P1-held (tail1M pooled H/B1.35333), with physical,
+  native-JIT and portable limits. Its package/API evidence stays source-scoped.
+- [patch] Prepare selected-exp sharing for a new immutable providerc0aa cohort.
+  Preserve coefficients, selected arithmetic in strict models, all fixtures and
+  targets. Naga/MSL still emits four exp calls; distinct inputs decrease3→2.
+  Downstream CSE remains a hypothesis requiring fresh exact source review,
+  affected package/API/backend checks and matched measurements. No speedup,
+  JIT or release acceptance is inferred; public #509 stays unchanged.
 
 ### Added
 

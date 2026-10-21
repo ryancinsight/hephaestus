@@ -1,24 +1,43 @@
 # Bounded activation evidence
 
-This validation-only helper compares actual baseline
+This validation-only helper compares immutable base
 `6f4dd9b942d083a8183fc56c3502c8d8322277d1` with immutable product head
-`838cf7abb156b21b521cdc9ef52b14833305cd17`, tree
-`26e0a45c44f638ccdb02646297ac71dc9af8e623`. This proposed provider is an
-ancestor of the validation revision so the normal automatic route can retrieve
-its exact object; the public #509 head remains `a735c608` during preparation.
-The validation PR checkout, including GitHub's possible merge commit, is
-recorded separately. The spec pins both trees, all eight exported operators
-in three dialects, and the unchanged 228-package external lock graph. Relative
-to the base, only WGSL GELU, GELU-gradient and tanh-GELU-gradient expressions
-differ. Relative to former head `9f7be898`, only GELU's existing factored
-branch selector changes from `x < -13` to `x < -7`; the gradient stays at -13.
+`c0aa1bdc9a91f876a198700235ed2b2e6197d0db`, tree
+`6c8ab23559daffa9a74a9b53f85b8a6cca128bfd`. The provider commit is an
+explicit ancestor of this validation revision so the ordinary automatic route
+can retrieve its exact object. Public production #509 remains `a735c608`.
+The validation PR checkout, including GitHub's possible test merge, is recorded
+separately. Exactly three head fields change in the comparison spec: revision,
+tree and the actual retained 24-row expression-export digest. Immutable base,
+228-row external graph, 372 baseline predicates, fixtures, scorer, timing,
+statistics, workflows and budgets remain unchanged.
 
-The previous hosted comparison retains four GELU far-band failures shared by
-base `6f4dd9b9` and head `9f7be898`. The new source proposal preserves those
-failures and adds all four inputs and -7 handoff neighbors to conformance.
-It changes no benchmark, baseline predicate, numerical target or budget.
-New full-suite, exact-six and matched comparison evidence is required; CPU
-source models and preparation supply no new device or performance result.
+The previous exact #510 head `5e2d7fd7` compares provider `838cf7ab` in hosted
+Metal run `39527890349`. Its full mandatory suites, six witnesses and both
+candidate invocations pass the existing numerical checks. The four previous
+normal GELU misses from run `39520852311` remain in its measured inputs and
+pass. Baseline failures and all earlier incomplete packets remain preserved.
+Observed numerical acceptance is scoped to that recorded cohort: the Apple
+Paravirtual Metal adapter exposes neither physical backing nor native JIT.
+Performance remains P1-held: GELU tail at 1,048,576 elements has pooled batch
+medians 2.175250 ms base and 2.943833 ms head, ratio 1.3533308815. Four processes
+on one VM do not establish causal or universal effects. Source-equivalent
+provider838 package and five Mac/six Linux registry API evidence remain valid
+for that source; none transfers to this changed provider.
+
+The new selected-exp sharing proposal preserves GELU's existing x < -7
+selector, gradient's x < -13 handoff, coefficients and selected arithmetic
+within the explicit strict CPU models. Relative to838, only the WGSL GeluOp
+export changes; the other 23 operator/dialect exports remain byte-identical.
+Pure Naga30.0.1/MSL still emits four exp nodes/calls before and after; distinct
+exp inputs decrease from three to two. This exposes a downstream CSE hypothesis,
+not measured instruction elimination, native-JIT identity or a speedup.
+Fresh independent source review, affected package/API checks, full backend
+suites and matched automatic measurements remain required. No numerical target,
+fixture, tolerance, baseline exception or workload changes for this proposal.
+Portable, physical, consumer/FFI/Python/service and release holds remain separate;
+Coeus Miri remains DEFERRED_UNVERIFIED. This preparation acquires no device and
+performs no public push, dispatch, merge or publication.
 
 The existing Metal job appends this phase after all mandatory suites and the six
 focused intrinsic witnesses succeed. Both products build on that VM with installed
