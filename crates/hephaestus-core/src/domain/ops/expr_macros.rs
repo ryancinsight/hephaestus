@@ -117,30 +117,28 @@ macro_rules! wgsl_erfc_nr_correction {
     };
 }
 
+// Preserve the regular exponent's exact left-associated argument. Callers may
+// select that argument before exp without regrouping its correction terms.
+macro_rules! wgsl_erfc_nr_exp_argument {
+    ($z:literal) => {
+        concat!("-(", $z, ") * (", $z, ") ", wgsl_erfc_nr_correction!($z))
+    };
+}
+
+macro_rules! wgsl_erfc_nr_pos_with_exp {
+    ($z:literal, $exponential:expr) => {
+        concat!("(", wgsl_erfc_nr_t!($z), " * ", $exponential, ")")
+    };
+}
+
 macro_rules! wgsl_erfc_nr_pos {
     ($z:literal) => {
-        concat!(
-            "(",
-            wgsl_erfc_nr_t!($z),
-            " * exp(-(",
-            $z,
-            ") * (",
-            $z,
-            ") ",
-            wgsl_erfc_nr_correction!($z),
-            "))"
-        )
+        wgsl_erfc_nr_pos_with_exp!($z, concat!("exp(", wgsl_erfc_nr_exp_argument!($z), ")"))
     };
 }
 
 macro_rules! wgsl_erfcx_nr_pos {
     ($z:literal) => {
-        concat!(
-            "(",
-            wgsl_erfc_nr_t!($z),
-            " * exp(",
-            wgsl_erfc_nr_correction!($z),
-            "))"
-        )
+        wgsl_erfc_nr_pos_with_exp!($z, concat!("exp(", wgsl_erfc_nr_correction!($z), ")"))
     };
 }

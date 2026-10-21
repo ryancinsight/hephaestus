@@ -12,11 +12,14 @@ use crate::domain::dialect::{CudaC, Wgsl};
 // keeps one argument and one composer shared with the grad term.
 macro_rules! wgsl_gelu_erfc_expr {
     () => {
+        wgsl_gelu_erfc_expr!(wgsl_erfc_nr_pos!("(abs((x)) * 0.7071067811865476)"))
+    };
+    ($positive:expr) => {
         concat!(
             "select((2.0 - ",
-            wgsl_erfc_nr_pos!("(abs((x)) * 0.7071067811865476)"),
+            $positive,
             "), ",
-            wgsl_erfc_nr_pos!("(abs((x)) * 0.7071067811865476)"),
+            $positive,
             ", (x) <= 0.0)"
         )
     };
@@ -28,11 +31,27 @@ macro_rules! wgsl_gelu_erfc_expr {
 // the slowly varying correction. The Gaussian also stays normal throughout
 // the normal-result GELU tail when the erfc intermediate becomes subnormal.
 macro_rules! wgsl_gelu_tail_expr {
-    () => {
+    ($exponential:expr) => {
         concat!(
             "((0.5 * (x) * ",
             wgsl_erfcx_nr_pos!("(abs((x)) * 0.7071067811865476)"),
-            ") * exp(-(0.5 * (x) * (x))))"
+            ") * ",
+            $exponential,
+            ")"
+        )
+    };
+}
+
+// Select the exact existing exponent argument before exp. Whichever outer
+// branch is selected receives its original argument and product grouping:
+// regular exp(r), or (0.5*x*(t*exp(correction)))*exp(-0.5*x*x) in the far band.
+// This shares a pure exp input; actual backend CSE and speed remain unmeasured.
+macro_rules! wgsl_gelu_shared_exp {
+    () => {
+        concat!(
+            "exp(select(",
+            wgsl_erfc_nr_exp_argument!("(abs((x)) * 0.7071067811865476)"),
+            ", -(0.5 * (x) * (x)), (x) < -7.0))"
         )
     };
 }
@@ -59,9 +78,12 @@ macro_rules! wgsl_gelu_grad_tail_expr {
 impl UnaryExpr<Wgsl> for GeluOp {
     const EXPR: &'static str = concat!(
         "select(select((0.5 * (x) * ",
-        wgsl_gelu_erfc_expr!(),
+        wgsl_gelu_erfc_expr!(wgsl_erfc_nr_pos_with_exp!(
+            "(abs((x)) * 0.7071067811865476)",
+            wgsl_gelu_shared_exp!()
+        )),
         "), ",
-        wgsl_gelu_tail_expr!(),
+        wgsl_gelu_tail_expr!(wgsl_gelu_shared_exp!()),
         ", (x) < -7.0), -0.0, (x) < -3.402823466e+38)"
     );
     const SUPPORTS_F64: bool = false;
