@@ -75,14 +75,22 @@ time fails as unmeasured. Each build is capped at 300 seconds; each invocation a
 120 seconds, with 15-second device-completion waits inside the harness. The phase
 deadline also bounds every subprocess. A timeout kills the process group, retains
 partial logs and stops without another acquisition. No timeout or budget is raised.
+Before the reversed block starts, at least four invocation caps (480 seconds)
+must remain on the original phase deadline. This admission does not guarantee
+verification/finalization fits: two maximum builds plus eight maximum children
+require 1,560 seconds before overhead, exceeding the unchanged 1,320-second phase.
+Insufficient time starts no fifth acquisition and leaves replication unmeasured.
 
 ## Measurements and numerical rejection
 
-The same production `WgpuDevice::try_metal` route runs serial base/head/head/base.
+The same production `WgpuDevice::try_metal` route runs mandatory base/head/head/base
+then reversed head/base/base/head in one future automatic job allocation. The two
+optimized binaries are built once there and their preserved hashes serve all eight
+serial processes; no prior VM or binary is resumed.
 The first unavailable adapter, runtime fault, identity mismatch or unexpected
 computed-value failure stops the campaign. A successful acquisition must report
 Metal plus IntegratedGpu or DiscreteGpu. Adapter, enabled features and device
-limits must match the focused witnesses and all four invocations. The collector
+limits must match the focused witnesses and all eight invocations. The collector
 records Rust/Naga, host, SDK and any standalone Metal tool metadata; unavailable
 runtime shader compiler/driver versions remain unknown. A missing standalone
 Metal tool does not trigger installation or substitute for runtime identity.
@@ -96,7 +104,13 @@ retains the existing subnormal-result exclusion and records those observations.
 Two warmups precede nine samples of eight dispatches per case. Timing includes
 public dispatch and device completion, excluding compilation/upload/readback.
 Raw samples, medians, range, median absolute deviation and head/base ratios are
-retained. No automatic performance threshold or acceptance claim is introduced.
+retained separately for both blocks. The original BHHB summary stays unchanged;
+the HBBH block adds H7/H4 head drift and B6/B5 baseline variation. All eight raw
+process arrays, monotonic phase offsets, UTC bookkeeping and child elapsed/RSS
+remain available. A secondary all-eight pooled ratio never replaces either block
+or its drift. Four processes per cohort and nine dependent samples per case share
+one VM and persistent caches; they are not independent VM/device replicates.
+No automatic performance threshold or acceptance claim is introduced.
 
 Expected baseline failures are a fixed, reviewed list of exact operator, band,
 input-bit and failure-class predicates. `predict_baseline.py` derives them from
@@ -159,12 +173,25 @@ downloaded evidence with:
 
 ```sh
 python3 .github/validation/activation/verify.py --artifacts /path/to/download
-python3 -B .github/validation/activation/test_validation.py
+python3 -m unittest discover -s .github/validation/activation -p 'test_[rv]*.py'
+python3 -B .github/validation/activation/test_adapter_identity.py
 ```
 
+The unchanged `test_baseline_profiles.py` also requires its four explicit CLI
+inputs: actual compiled `--exports`/`--manifest` and accepted
+`--previous-predicates`/`--previous-generator` paths. Missing inputs fail rather
+than skip that test class; retained exact fixtures may be reused without a build.
+
 The verifier rechecks file hashes, binary/source/fixture bindings, exact expression
-coverage, all checks/samples, baseline classifications and cohort identity. A
-complete measured packet remains pending independent performance assessment.
+coverage, all checks/samples, baseline classifications and cohort identity. The
+new complete status requires exactly BHHB+HBBH, global indices 0..7, block/slot
+labels, unchanged binary hashes and one matched adapter identity. A failure or
+incomplete second block preserves the first as raw diagnostic only; it cannot
+produce a complete replicated result or selected favorable summary. Existing
+packets retain their original frozen verifier. Complete replicated measurements
+remain pending independent performance assessment. Endpoint-role reversal probes
+order association; it does not remove arbitrary time/thermal/carryover noise or
+prove a CSE mechanism. Equal ordinal means do not cancel pooled-median drift.
 Unavailable or incomplete evidence leaves performance unmet. Portable intrinsic,
 broader provider/consumer, Miri, service, publication and merge holds remain
 separate; this helper does not resolve them.

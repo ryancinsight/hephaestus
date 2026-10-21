@@ -59,6 +59,12 @@ paths unchanged; this correction targets that current base. The
   support a CSE hypothesis only; renew affected package/API/backend checks and
   matched automatic measurements before accepting this changed source. Keep
   coefficients, selected arithmetic, targets, predicates and budgets unchanged.
+- [x] [patch] Prepare private replicated measurement controls: unchanged BHHB
+  then fixed HBBH, one future VM/two binaries, all eighteen cases and numeric
+  checks, one shared deadline and explicit incomplete-block rejection.
+- [ ] [patch] Independently review the replicated helper/spec and external
+  analyzer pins, then assess its new automatic cohort with both block ratios,
+  all process distributions/drift and no selected pooled speedup claim.
 - [ ] [patch] Resolve the six allowed-intrinsic countermodels through an
   owner/coordinator accuracy-contract decision and supporting proof or
   adapter/driver/compiler qualification. Preserve strict existing tests;

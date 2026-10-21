@@ -16,7 +16,8 @@ import time
 import tomllib
 
 sys.dont_write_bytecode = True
-from verify import InvalidEvidence, diagnostic_identity, exports, manifest, measured_run, require, sha256, timing_summary
+from verify import (InvalidEvidence, campaign_layout, diagnostic_identity, exports, manifest,
+                    measured_run, replication_admission, require, sha256, timing_summary)
 
 HERE = Path(__file__).resolve().parent
 
@@ -282,39 +283,65 @@ class Driver:
 
     def campaign(self, manifests):
         predicates = json.loads((HERE / self.spec['expected_baseline_predicates']).read_text())
-        identity = None
-        runs = []
-        for index, cohort in enumerate(self.spec['order']):
-            build = self.record['builds'][cohort]
-            binary = self.artifacts / build['binary']
-            require(sha256(binary) == build['binary_sha256'], 'copied binary changed')
-            env = os.environ.copy()
-            env['ACTIVATION_DEVICE_AUTHORIZATION'] = 'root-approved-metal-only'
-            self.record['device_attempts'] += 1
-            row = {'index': index, 'cohort': cohort, 'command_index': len(self.record['commands']), 'status': 'STARTED_OUTCOME_PENDING'}
-            self.record['campaign'].append(row)
+        identity, runs, block, row = None, [], None, None
+        self.record['campaign_blocks'], self.record['block_timing_summaries'] = [], {}
+        origin = self.deadline - self.spec['budgets']['phase_seconds']
+        stamp = lambda: {'phase_finished_seconds': time.monotonic() - origin,
+                         'finished_utc': datetime.datetime.now(datetime.timezone.utc).isoformat()}
+        try:
+            for index, name, slot, cohort in campaign_layout(self.spec):
+                if slot == 0:
+                    block = {'name': name, 'start_index': index, 'status': 'STARTED',
+                             'phase_started_seconds': time.monotonic() - origin,
+                             'started_utc': datetime.datetime.now(datetime.timezone.utc).isoformat()}
+                    self.record['campaign_blocks'].append(block)
+                    if name == 'reversed':
+                        block['admission'] = replication_admission(self.spec, self.spec['budgets']['phase_seconds'] - block['phase_started_seconds'])
+                        if not block['admission']['sufficient']:
+                            raise Stopped('REPLICATED_CONTROL_UNMEASURED', 'insufficient phase budget for four additional child caps; no fifth acquisition')
+                build = self.record['builds'][cohort]
+                binary = self.artifacts / build['binary']
+                require(sha256(binary) == build['binary_sha256'], 'copied binary changed')
+                env = os.environ.copy()
+                env['ACTIVATION_DEVICE_AUTHORIZATION'] = 'root-approved-metal-only'
+                self.record['device_attempts'] += 1
+                row = {'index': index, 'block': name, 'slot': slot, 'cohort': cohort,
+                       'binary_sha256': build['binary_sha256'], 'command_index': len(self.record['commands']),
+                       'phase_started_seconds': time.monotonic() - origin,
+                       'started_utc': datetime.datetime.now(datetime.timezone.utc).isoformat(), 'status': 'STARTED_OUTCOME_PENDING'}
+                self.record['campaign'].append(row)
+                self.save()
+                item, stdout, stderr = self.command([str(binary), '--run-device'], f'run-{index}-{cohort}',
+                                                   cap=self.spec['budgets']['invocation_seconds'], env=env, check=False)
+                row.update(**stamp(), stdout=self.relative(stdout), stderr=self.relative(stderr), exit_code=item['exit_code'])
+                self.save()
+                with stderr.open() as stream:
+                    unavailable = any('ACQUISITION_FAILURE\t' in line for line in stream)
+                if unavailable or item['exit_code'] == 2:
+                    row['status'] = 'ACQUISITION_FAILURE_STOPPED_NO_RETRY'
+                    raise Stopped('ACQUISITION_FAILURE_UNMEASURED', 'production Metal acquisition failed; no retry/fallback')
+                require(item['exit_code'] in [0, 1], 'runtime error, no retry')
+                checked = measured_run(stdout, manifests[cohort], self.spec, cohort, predicates, self.record['diagnostic_identity'])
+                require(item['exit_code'] == (1 if checked['failures'] else 0), 'exit/correctness mismatch')
+                require(identity is None or identity == checked['identity'], 'campaign adapter/feature/limit mismatch')
+                identity = checked['identity']
+                row.update(classified_baseline_failures=checked['failures'], verified_samples=len(checked['timings']),
+                           status='VERIFIED_WITH_EXPECTED_BASELINE_FAILURES' if checked['failures'] else 'VERIFIED')
+                runs.append((cohort, checked))
+                if slot == 3:
+                    summary = timing_summary(runs[index - 3:index + 1])
+                    self.record['block_timing_summaries'][name] = summary
+                    if name == 'mandatory':
+                        self.record['timing_summary'] = summary
+                    block.update(**stamp(), status='VERIFIED')
+                self.save()
+        except (InvalidEvidence, OSError, ValueError, KeyError):
+            if row is not None and row['status'] == 'STARTED_OUTCOME_PENDING':
+                row.update(**stamp(), status='STOPPED_UNVERIFIED')
+            if block is not None:
+                block.update(**stamp(), status='UNMEASURED_OR_INVALID')
             self.save()
-            item, stdout, stderr = self.command([str(binary), '--run-device'], f'run-{index}-{cohort}',
-                                               cap=self.spec['budgets']['invocation_seconds'], env=env, check=False)
-            row.update(stdout=self.relative(stdout), stderr=self.relative(stderr), exit_code=item['exit_code'])
-            self.save()
-            with stderr.open() as stream:
-                unavailable = any('ACQUISITION_FAILURE\t' in line for line in stream)
-            if unavailable or item['exit_code'] == 2:
-                row['status'] = 'ACQUISITION_FAILURE_STOPPED_NO_RETRY'
-                raise Stopped('ACQUISITION_FAILURE_UNMEASURED', 'production Metal acquisition failed; no retry/fallback')
-            require(item['exit_code'] in [0, 1], 'runtime error, no retry')
-            checked = measured_run(stdout, manifests[cohort], self.spec, cohort, predicates, self.record['diagnostic_identity'])
-            require(item['exit_code'] == (1 if checked['failures'] else 0), 'exit/correctness mismatch')
-            if identity is not None:
-                require(identity == checked['identity'], 'BHHB adapter/feature/limit mismatch')
-            identity = checked['identity']
-            row['classified_baseline_failures'] = checked['failures']
-            row['verified_samples'] = len(checked['timings'])
-            row['status'] = 'VERIFIED_WITH_EXPECTED_BASELINE_FAILURES' if checked['failures'] else 'VERIFIED'
-            runs.append((cohort, checked))
-            self.save()
-        self.record['timing_summary'] = timing_summary(runs)
+            raise
 
     def finish(self):
         self.record['completed_utc'] = datetime.datetime.now(datetime.timezone.utc).isoformat()
@@ -361,7 +388,7 @@ def main():
         driver.record['baseline_predicates_sha256'] = sha256(HERE / driver.spec['expected_baseline_predicates'])
         if args.hosted:
             driver.campaign(manifests)
-            driver.record['status'] = 'MEASURED_COHORT_REVIEW_PENDING'
+            driver.record['status'] = 'MEASURED_REPLICATED_COHORT_REVIEW_PENDING'
         else:
             driver.record['status'] = 'CPU_PREPARED_NO_DEVICE_EXECUTION'
         driver.finish()

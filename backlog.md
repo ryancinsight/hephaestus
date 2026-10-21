@@ -14,7 +14,7 @@
 - Far-band history: run `39520852311` retains four normal GELU misses shared by base `6f4dd9b9` and former head `9f7be898`; provider `838cf7ab` selects the existing factored path below -7, keeps gradient below -13, and adds all four inputs and handoff neighbors.
   Exact5e/provider838 has independently accepted observed Metal numerical results in run `39527890349` and package/five Mac/six Linux API evidence; P1 performance remains held (GELU tail1M pooled H/B1.35333), with one-VM/JIT/physical/portable limits.
   New provider `c0aa1bdc` shares selected exp inputs while preserving strict modeled arithmetic: raw Naga/MSL exp4→4, distinct inputs3→2; downstream CSE is a hypothesis, with no measured speedup or JIT proof.
-  #510 remains validation work and public #509 a735 is unchanged; fresh exact review/backend/performance/package/API gates apply to the new source, while consumer/FFI/Python/service/Harmonia holds and Coeus Miri DEFERRED_UNVERIFIED remain.
+  #510 remains validation work and public #509 a735 is unchanged; fresh exact review/backend/performance/package/API gates apply to the new source, while consumer/FFI/Python/service/Harmonia holds and Coeus Miri DEFERRED_UNVERIFIED remain. Private replicated controls append HBBH after mandatory BHHB with the same two future-job binaries/one VM, unchanged cases/numerics/budgets and explicit incomplete-block rejection; current150 numerical success remains P1 performance-held, with exact helper/analysis/cohort review pending.
 - Finding 2: WGSL GELU-tanh gradient overflows on finite huge inputs despite
   outer selects. Bound operands before eager evaluation, use a nonoverflowing
   sigmoid product, and retain saturation/handoff/ordinary controls under

@@ -1,6 +1,7 @@
 """Strict CPU-only validation of exact activation manifests and measured records."""
 import argparse
 import collections
+import datetime
 import hashlib
 import json
 import math
@@ -317,6 +318,80 @@ def artifact_files(directory, manifest_path):
     return len(records)
 
 
+def campaign_layout(spec):
+    require(spec['order'] == ['base', 'head', 'head', 'base'], 'mandatory BHHB order changed')
+    require(spec['replication_order'] == ['head', 'base', 'base', 'head'], 'reversed HBBH order changed')
+    return [(block_index * 4 + slot, name, slot, cohort)
+            for block_index, (name, order) in enumerate([('mandatory', spec['order']), ('reversed', spec['replication_order'])])
+            for slot, cohort in enumerate(order)]
+
+
+def replication_admission(spec, remaining):
+    required = len(spec['replication_order']) * spec['budgets']['invocation_seconds']
+    return {'required_remaining_phase_seconds': required, 'observed_remaining_phase_seconds': remaining,
+            'sufficient': remaining >= required}
+
+
+def phase_span(row, limit):
+    start, end = row['phase_started_seconds'], row['phase_finished_seconds']
+    require(all(type(x) in [int, float] and math.isfinite(x) for x in [start, end])
+            and 0 <= start <= end <= limit, 'invalid campaign phase span')
+    for key in ['started_utc', 'finished_utc']:
+        require(datetime.datetime.fromisoformat(row[key]).utcoffset() == datetime.timedelta(0), 'campaign UTC missing')
+    return start, end
+
+
+def campaign_runs(root, result, spec, parsed, predicates, diagnostic):
+    layout, campaign = campaign_layout(spec), result['campaign']
+    require(len(campaign) == result['device_attempts'] == len(layout), 'incomplete replicated campaign')
+    blocks = result['campaign_blocks']
+    require(len(blocks) == 2, 'incomplete campaign blocks')
+    limit, spans, previous = spec['budgets']['phase_seconds'], [], 0
+    for index, block in enumerate(blocks):
+        require(block['name'] == ['mandatory', 'reversed'][index] and type(block['start_index']) is int and block['start_index'] == index * 4
+                and block['status'] == 'VERIFIED', 'invalid campaign block')
+        start, end = phase_span(block, limit)
+        require(start >= previous, 'overlapping campaign blocks')
+        spans.append((start, end))
+        previous = end
+    require(blocks[1]['admission'] == replication_admission(spec, limit - spans[1][0])
+            and blocks[1]['admission']['sufficient'], 'invalid reversed-block admission')
+    verified, identity, seen_commands, seen_outputs, previous = [], None, set(), set(), 0
+    for row, (index, block, slot, cohort) in zip(campaign, layout):
+        require(type(row['index']) is int and type(row['slot']) is int
+                and (row['index'], row['block'], row['slot'], row['cohort']) == (index, block, slot, cohort), 'campaign order/labels mismatch')
+        start, end = phase_span(row, limit)
+        low, high = spans[index // 4]
+        require(low <= start <= end <= high and start >= previous, 'campaign process span mismatch')
+        previous = end
+        require(row['binary_sha256'] == result['builds'][cohort]['binary_sha256'], 'campaign binary mismatch')
+        command_index = row['command_index']
+        require(type(command_index) is int and 0 <= command_index < len(result['commands'])
+                and command_index not in seen_commands, 'campaign command index mismatch')
+        command = result['commands'][command_index]
+        require(command['name'] == f'run-{index}-{cohort}' and command['exit_code'] == row['exit_code']
+                and command['timed_out'] is False and command['stdout'] == row['stdout'] and command['stderr'] == row['stderr']
+                and len(command['args']) == 2 and command['args'][1] == '--run-device'
+                and Path(command['args'][0]).name == Path(result['builds'][cohort]['binary']).name, 'campaign command mismatch')
+        require(not {row['stdout'], row['stderr']} & seen_outputs and row['stdout'] != row['stderr'], 'duplicate campaign output')
+        seen_commands.add(command_index)
+        seen_outputs.update([row['stdout'], row['stderr']])
+        checked = measured_run(root / row['stdout'], parsed[cohort], spec, cohort, predicates, diagnostic)
+        require(row['exit_code'] == (1 if checked['failures'] else 0)
+                and row['classified_baseline_failures'] == checked['failures'] and row['verified_samples'] == len(checked['timings'])
+                and row['status'] == ('VERIFIED_WITH_EXPECTED_BASELINE_FAILURES' if checked['failures'] else 'VERIFIED'), 'campaign exit/correctness mismatch')
+        require(identity is None or identity == checked['identity'], 'campaign adapter mismatch')
+        identity = checked['identity']
+        verified.append((cohort, checked))
+    device_commands = {i for i, command in enumerate(result['commands'])
+                       if command['name'].startswith('run-') or '--run-device' in command['args']}
+    require(device_commands == seen_commands, 'unreferenced or missing device command')
+    summaries = {name: timing_summary(verified[start:start + 4]) for name, start in [('mandatory', 0), ('reversed', 4)]}
+    require(result['timing_summary'] == summaries['mandatory'] and result['block_timing_summaries'] == summaries,
+            'block timing summary differs from raw samples')
+    return verified
+
+
 def timing_summary(runs):
     """Raw samples remain primary; summarize dispatch+completion, without a gate."""
     groups = collections.defaultdict(lambda: {'base': [], 'head': []})
@@ -344,6 +419,10 @@ def packet(directory):
     index = root / 'activation/manifest.json'
     require(sha256(index) == result['artifact_manifest_sha256'], 'artifact index hash mismatch')
     count = artifact_files(root, index)
+    indexed = {row['path'] for row in json.loads(index.read_text())['files']}
+    references = [build[key] for build in result['builds'].values() for key in ['binary', 'expression_file', 'cpu_manifest']]
+    references += [row[key] for row in result['campaign'] for key in ['stdout', 'stderr'] if key in row]
+    require(all(path in indexed for path in references), 'unindexed build/campaign artifact')
     spec = json.loads((root / 'activation/comparison_spec.json').read_text())
     parsed, expression_maps = {}, {}
     for cohort, build in result['builds'].items():
@@ -373,20 +452,14 @@ def packet(directory):
         require(result['builds']['base']['binary_sha256'] != result['builds']['head']['binary_sha256'], 'cohort binaries are not distinct')
     verified = []
     campaign = result['campaign']
-    if result['status'] == 'MEASURED_COHORT_REVIEW_PENDING':
-        require(len(campaign) == result['device_attempts'] == 4 and [r['cohort'] for r in campaign] == spec['order'], 'incomplete BHHB campaign')
+    if result['status'] == 'MEASURED_REPLICATED_COHORT_REVIEW_PENDING':
         diagnostic = diagnostic_identity(root / 'witness-nextest.log')
         predicates = json.loads((root / 'activation/baseline_failures.json').read_text())
-        identity = None
-        for row in campaign:
-            checked = measured_run(root / row['stdout'], parsed[row['cohort']], spec, row['cohort'], predicates, diagnostic)
-            require(row['exit_code'] == (1 if checked['failures'] else 0), 'campaign exit/correctness mismatch')
-            require(identity is None or identity == checked['identity'], 'campaign adapter mismatch')
-            identity = checked['identity']
-            verified.append((row['cohort'], checked))
-        require(result['timing_summary'] == timing_summary(verified), 'timing summary differs from raw samples')
+        verified = campaign_runs(root, result, spec, parsed, predicates, diagnostic)
     elif result['status'] == 'CPU_PREPARED_NO_DEVICE_EXECUTION':
         require(len(parsed) == 2 and result['device_attempts'] == 0 and not campaign, 'CPU preparation includes device attempts')
+    else:
+        require(not result['status'].startswith('MEASURED'), 'unsupported measured campaign status')
     return {'artifact_files_verified': count, 'status': result['status'], 'measured_invocations_verified': len(verified),
             'performance_accepted': False, 'note': 'Measured cohort requires independent performance assessment; no portable intrinsic qualification.'}
 

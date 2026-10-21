@@ -46,6 +46,12 @@
     "head",
     "base"
   ],
+  "replication_order": [
+    "head",
+    "base",
+    "base",
+    "head"
+  ],
   "budgets": {
     "job_seconds": 2700,
     "phase_seconds": 1320,

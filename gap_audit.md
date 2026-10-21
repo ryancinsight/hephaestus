@@ -42,6 +42,11 @@
   affected package/API/backend and matched performance evidence remain open.
   Public #509 a735 stays unchanged; #510 is validation only. Old failures,
   predicates, numerical targets and budgets remain intact.
+- Replicated measurement controls remain private: mandatory BHHB then fixed
+  HBBH uses the same two future-job binaries, unchanged cases/checks/budgets and
+  a shared deadline. Current150 numeric success supplies no P1 performance pass;
+  both block distributions/drift and new exact helper/cohort review are required.
+  Incomplete second blocks cannot supply selected favorable performance evidence.
 - The private observed-cohort proposal adds explicit six-witness fixtures and
   retained actual-value/source/lock/adapter diagnostics, preserving every target
   and production expression. Five selection guards fail on the base; SiLU -6

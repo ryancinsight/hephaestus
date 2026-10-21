@@ -349,3 +349,35 @@ portable numerical acceptance. Actual final-revision observations and their
 limits require independent review and owner/coordinator disposition before
 any merge or publication. Coeus Miri remains deferred and unverified; the
 other hardware/service and consumer release holds retain their own scope.
+
+
+## Private replicated measurement controls
+
+Exact150/provider c0aa has accepted observed numerical results but P1 performance
+remains held: million-element GELU tail pooled H/B0.800945 coexists with B3/B0
+2.36324, and finite-saturation baseline drift reaches11.8352. Source exp counts
+remain four; distinct inputs3→2 support no measured CSE or JIT conclusion.
+
+The private protocol keeps mandatory BHHB then adds fixed HBBH after the full
+suite and six witnesses, on one future existing automatic Metal job allocation.
+It builds two optimized binaries once and reuses those hashes across eight
+serial processes, retaining all eighteen cases,9samples,8dispatches,2warmups,
+fixtures, output checks,372predicates and targets. Four process observations per
+cohort share the same VM/cache state; they are not independent hardware samples.
+
+One original1,320-second deadline covers both blocks. Before the fifth process,
+the reversed block requires480seconds remaining (four existing120-second caps).
+Maximum builds/children total1,560seconds before overhead, so admission does not
+guarantee completion. No45-minute job,22-minute phase,1,500-second entry guard,
+artifact reserve, build/invocation bound or17MiB logical buffer contract changes.
+A partial/faulted block stops without retry; first-block raw diagnostics remain,
+but no complete replicated analysis or selected favorable block is accepted.
+
+Both block ratios/drift and all eight raw process distributions/time offsets stay
+visible; any global pooled ratio is secondary descriptive output. Endpoint-role
+reversal does not remove nonlinear wall-clock, thermal or carryover noise, and
+ordinal balance proves no pooled-median cancellation. Future exact code/helper
+review, externally pinned analysis and a new automatic cohort remain pending.
+Package/API/CPU evidence remains reusable only while six production trees and
+manifests, workspace manifest/lock/config/toolchain byte-bind to c0aa. Preserve
+Linux cached-baseline provenance limits and all portable/consumer/service holds.

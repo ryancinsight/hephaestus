@@ -38,6 +38,11 @@
 
 ### Added
 
+- [patch] Add private BHHB/HBBH measurement controls using the same two
+  future-job binaries, fixed cases/checks and unchanged resource budgets.
+  Retain both blocks and all process drift; incomplete blocks cannot produce
+  a performance result. Exact helper review and a new automatic cohort remain
+  pending; no production/API change or speedup acceptance follows.
 - [patch] Emit validation protocol records through explicit line-buffered I/O.
   Preserve record values and timing controls; write or flush failures use a
   fatal status distinct from numerical failures and unavailable adapters.
