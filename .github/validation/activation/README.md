@@ -71,7 +71,26 @@ retained. No automatic performance threshold or acceptance claim is introduced.
 Expected baseline failures are a fixed, reviewed list of exact operator, band,
 input-bit and failure-class predicates. `predict_baseline.py` derives them from
 actual baseline exports and compiled f64 reference bits using explicit binary32
-CPU operations in gradual and per-operation FTZ profiles. Its libm-exp model is
+CPU operations. The original direct-libm-exp profiles remain unchanged. A general
+fixed alternative uses `RN32(exp2(RN32(a * RN32(log2(e)))))`, with independently
+derived binary32 `log2(e)` bits `0x3fb8aa3b`; both intrinsic profiles have gradual
+and per-operation FTZ modes. No observed output or input-specific model branch is
+used. The generated union preserves all original per-input/class predicates.
+
+Before regeneration succeeds, every active finite exp argument in the fixed
+compiled fixture set passes an 80-digit, outward-bounded check against WGSL's
+`(3 + 2*abs(argument))` ULP allowance for exp and exp2. Exact-result overflow and
+underflow use explicit analytic bounds. Selected values and conditions determine
+active dependencies; unselected exp calls are not mistaken for active evidence.
+The check validates the unflushed approximation first and accounts separately for
+WGSL-permitted subnormal flushing. The smallest normal remains normal; only
+subnormal results are flushed by the unchanged FTZ mode. Nonfinite arguments are
+reported separately from finite accuracy proofs. Repeated arguments are cached;
+proof counts and a canonical record digest bind regeneration to this fixed set.
+The optional `--admissibility-output` retains full CPU proof records.
+
+The source profile demonstrates allowable baseline failures, not an actual JIT
+mechanism or whole-domain numerical guarantee. The host libm exp/exp2 models are
 neither correctly-rounded-f32 nor portable/compiler qualification. The generated
 map is checked before the hosted campaign; it is never learned from new device
 results. Baseline exit 1 is accepted only when all failures match those predicates
