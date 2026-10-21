@@ -49,28 +49,37 @@ fn mid_inputs() -> Vec<f32> {
         -3.0,
         512,
         &[
-            -3.0, // mid-band handoff (also covered by the main sweep)
-            -5.5, // the old `1 + erf` form rounds to 0 past here
-            -7.0, // far-band handoff (also covered by the far sweep)
+            -3.0,                        // mid-band handoff (also covered by the main sweep)
+            -5.5,                        // the old `1 + erf` form rounds to 0 past here
+            -7.0,                        // far-band handoff (also covered by the far sweep)
+            f32::from_bits(0xc0df_ffff), // adjacent unscaled-composer handoff
+            f32::from_bits(0xc0e0_0001), // adjacent factored-composer handoff
         ],
     )
 }
 
-/// 512 points over the far band `[-15, -7)`, swept at the conditioning
-/// bound at its deepest `z`: the same `2z²` amplification as the mid band.
+/// 512 points over the far band `[-15, -7)`, swept at the unchanged
+/// conditioning bound. WGSL factors the Gaussian throughout this band
+/// so that the rounded `x/sqrt(2)` argument enters only the correction.
 fn far_inputs() -> Vec<f32> {
     sweep_inputs(
         -15.0,
         -7.0,
         512,
         &[
-            -7.0,  // far-band handoff (also covered by the mid sweep)
+            -7.0,                        // far-band handoff (also covered by the mid sweep)
+            f32::from_bits(0xc0df_ffff), // adjacent unscaled-composer handoff
+            f32::from_bits(0xc0e0_0001), // adjacent factored-composer handoff
+            f32::from_bits(0xc14f_e3f4), // retained unscaled-exp source countermodels
+            f32::from_bits(0xc149_05b3),
+            f32::from_bits(0xc144_6f7a),
+            f32::from_bits(0xc13e_0c2d),
             -10.0, // deep tail interior
             -12.5, // former fixed floor; the erfc intermediate stays normal below it
             -12.6,
             -13.0,                       // retained normal erfc/intermediate controls
-            f32::from_bits(0xc14f_ffff), // adjacent original-composer handoff
-            f32::from_bits(0xc150_0001), // adjacent scaled-composer handoff
+            f32::from_bits(0xc14f_ffff), // retained control above the former -13 handoff
+            f32::from_bits(0xc150_0001), // retained control below the former -13 handoff
             f32::from_bits(0xc150_014b), // old gradual model exceeds 256 ULP
             f32::from_bits(0xc150_0c85), // first old-selector exclusion
             f32::from_bits(0xc151_818a), // old gradual-model worst tail witness
@@ -93,8 +102,10 @@ fn wgsl_inputs(inputs: &[f32]) -> Vec<f32> {
 /// unconfirmed on hardware. A legal WGSL intrinsic perturbation can exceed
 /// the main target; these sampled targets have no portable composition proof.
 /// WGSL tail selection follows final reference normality, including the
-/// last normal-result input. Below `-13` the shared Chebyshev correction
-/// factors out the Gaussian to avoid a subnormal erfc intermediate.
+/// last normal-result input. Below the existing far-band boundary `-7`,
+/// the shared Chebyshev correction factors out the Gaussian, avoiding
+/// quadratic amplification of the rounded erfc argument and subnormal
+/// erfc intermediates in the deepest normal-result tail.
 /// Source/reference checks do not establish device or portable accuracy.
 /// CUDA and HIP retain their IEEE tail sweep.
 pub fn assert_gelu_sweep<D, E>(device: &D, ops: &E, dialect: SweepDialect)
@@ -158,6 +169,24 @@ mod tests {
             for x in previous {
                 assert!(selected.iter().any(|y| y.to_bits() == x.to_bits()));
             }
+        }
+    }
+    #[test]
+    fn wgsl_far_sweep_retains_unscaled_exponent_regressions_and_handoff() {
+        let inputs = wgsl_inputs(&far_inputs());
+        for bits in [
+            0xc14f_e3f4,
+            0xc149_05b3,
+            0xc144_6f7a,
+            0xc13e_0c2d,
+            0xc0df_ffff,
+            0xc0e0_0000,
+            0xc0e0_0001,
+        ] {
+            assert!(
+                inputs.iter().any(|x| x.to_bits() == bits),
+                "normal GELU far regression removed: {bits:08x}"
+            );
         }
     }
 }
