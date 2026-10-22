@@ -1,5 +1,37 @@
 # Changelog
 
+## [0.27.1] - Unreleased
+
+### Fixed
+
+- [patch] Use one magnitude predicate for bounded WGSL GELU-tanh-gradient
+  operands and saturation. Remove the clamp/self-equality dependency and
+  separate negative comparison implicated by retained NaN failures. Preserve
+  native scalar typing, structural controls and thresholds. The accepted
+  magnitude-selection source passes its six automatic workflows; that
+  evidence does not qualify the later private normal-tail correction.
+
+- [patch] Bound WGSL GELU-tanh-gradient operands before eager polynomial
+  evaluation and use a nonoverflowing sigmoid product. Finite saturated
+  inputs keep their rounded zero/one limits, including both signs of
+  `1e20`, `1e30`, and the largest finite binary32 value.
+- [patch] Extend WGSL GELU/gradient sweeps through their final normal
+  reference results, retaining directed last-normal and adjacent subnormal
+  controls. Below `-13`, factor the shared erfc correction from the Gaussian;
+  scale the gradient Gaussian by 512 and fold its reciprocal into the
+  coefficients to avoid subnormal intermediates. Preserve native scalar
+  typing, C/HIP expressions and every ULP/absolute target. CPU reference
+  verification does not establish device, compiler or performance acceptance.
+
+### Verification limits
+
+- [patch] Track all three shipped 0.26 findings in the kernel-tail backlog.
+  Existing sampled WGSL targets lack a portable composition proof; six
+  allowed-intrinsic countermodels remain open. CPU arithmetic/source checks
+  do not establish device accuracy or performance. No release is qualified
+  by this private correction alone.
+
+
 ## [0.27.0] - Unreleased
 
 ### Added

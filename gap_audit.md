@@ -1,5 +1,45 @@
 # Gap Audit - hephaestus
 
+## [HEPH-KERNEL-TAIL-ACCURACY] Shipped 0.26 residual findings [patch] — open
+
+- Shipped 0.26.0 ([PR #507](https://github.com/ryancinsight/hephaestus/pull/507)) retains excluded
+  normal tails, finite WGSL GELU-tanh-gradient overflow, and six refuted or
+  unproved portable composition targets. The private 0.27.1 correction
+  bounds eager operands, restores directed reference-normal erfc coverage,
+  and groups GELU-gradient terms before halving at -13. Existing tolerance
+  gates, C/HIP expressions and public value-function contracts remain.
+- Post-draft evidence: automatic WGPU contracts on
+  [PR #509](https://github.com/ryancinsight/hephaestus/pull/509) at the reviewed forwarding head
+  pass all 116; Metal retains three GELU-tanh-gradient NaN violations.
+  The private follow-up shares one magnitude predicate for bounded operands
+  and saturation, removing clamp/self-equality and a separate negative guard.
+  Native models and optimizer stress observations support this mechanism;
+  actual Metal compilation/execution and independent review remain pending.
+  Those are historical failures. The subsequent independently reviewed
+  magnitude-selection head ec650afe passes all six automatic workflows.
+  That evidence does not qualify this later private normal-tail delta.
+  The earlier failures and every threshold remain unchanged.
+- Normal-tail source follow-up: final-reference selection and a shared
+  scaled-erfc correction cover the formerly excluded normal-result interval
+  in CPU arithmetic models. The gradient uses a Gaussian scaled by 512
+  inside exp, with reciprocal scaling folded into its coefficients. Directed
+  last-normal controls retain the unchanged 256 ULP target. Independent
+  review, actual backend execution and compiler/performance qualification of
+  this private delta remain open. Portable-bound design stays separate; no
+  tolerance increase resolves allowed-intrinsic countermodels.
+- Evidence boundary: final shipped sampled WGPU/Metal passes remain valid;
+  historical Mish failures are not final-source failures. Local directed
+  Metal acquisition returns AdapterUnavailable before dispatch (0/27 lanes),
+  and no alternative acquisition is attempted. CPU models are not GPU output.
+- Closure: exact private-diff review, applicable unchanged gates and device
+  execution, owner/base reconciliation, current consumer qualification,
+  and authorized lifecycle actions remain pending. See the restored
+  [backlog anchor](backlog.md#heph-kernel-tail-accuracy),
+  [analysis](docs/verification/accuracy/design.md), and
+  [checklist](docs/verification/accuracy/checklist.md).
+
+
+
 ## [HEPH-EUNOMIA-010-COHORT] Default-source graph [minor]
 
 - Finding: default numeric providers advance beyond the 0.21 consumer's 0.9/0.2 requirements. The 0.22 candidate aligns Eunomia 0.10, Aequitas 0.3, Leto 0.46 and Moirai-sync 0.9.3 without altering Rust sources.

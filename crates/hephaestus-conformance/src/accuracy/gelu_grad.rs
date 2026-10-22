@@ -12,9 +12,11 @@
 
 use hephaestus_core::{ComputeDevice, DialectScalar, ElementwiseOps, GeluGradOp, UnaryExpr};
 
+use super::runner::with_normal_unary_result;
+
 use super::{
-    SweepDialect, above_flush_floor, assert_unary_sweep_abs_within, assert_unary_sweep_within,
-    sweep_inputs, without_subnormals,
+    SweepDialect, assert_unary_sweep_abs_within, assert_unary_sweep_within, sweep_inputs,
+    without_subnormals,
 };
 
 /// 2048 points over each of `[-3, -1.4]` and `[-0.1, 4]`, 256 over the
@@ -82,23 +84,39 @@ fn far_inputs() -> Vec<f32> {
         &[
             -7.0,  // far-band handoff (also covered by the mid sweep)
             -10.0, // deep tail interior
-            -12.5, // WGSL flush floor: the last swept subnormal-free input
-            -13.0, // past the floor (CUDA/HIP only)
+            -12.5, // former fixed floor; the erfc intermediate stays normal below it
+            -12.6,
+            -13.0,                       // retained normal erfc/intermediate controls
+            f32::from_bits(0xc14f_ffff), // adjacent original-composer handoff
+            f32::from_bits(0xc150_0001), // adjacent scaled-composer handoff
+            f32::from_bits(0xc150_0c85), // first old-selector exclusion
+            -13.1,                       // normal final result whose erfc intermediate is subnormal
+            -13.3,                       // normal final result whose Gaussian is also subnormal
+            f32::from_bits(0xc153_765b), // Gaussian first becomes subnormal
+            f32::from_bits(0xc155_7858), // penultimate normal-result input
+            f32::from_bits(0xc155_7859), // last normal-result input
+            f32::from_bits(0xc155_785a), // adjacent subnormal-result control
         ],
     )
 }
 
+fn wgsl_inputs(inputs: &[f32]) -> Vec<f32> {
+    with_normal_unary_result::<GeluGradOp>(&without_subnormals(inputs))
+}
+
 /// Sweep [`GeluGradOp`](hephaestus_core::GeluGradOp) on one backend.
 ///
-/// Bounds grade with the `2z²` conditioning like `gelu.rs`: main `16`
-/// ULP, mid `64` ULP on the C dialects and `128` ULP on WGSL, far `256`
-/// ULP. The HIP `erfcf` row is the CUDA row carried unconfirmed — no
-/// HIP-published row was found; any excess on hardware CI is a finding.
-/// The root window sweeps separately at the absolute floor: CUDA `2e-7`,
-/// HIP `2e-7`, WGSL `3e-7` (the forms' absolute rounding over unit-scale
-/// terms, plus margin). WGSL additionally drops `x < -12.5`, where the
-/// true result is subnormal and flushing is permitted; CUDA and HIP sweep
-/// the tail as IEEE.
+/// Existing targets remain unchanged: all main bands `16` ULP; CUDA/HIP
+/// mid `64`, WGSL mid `128`, all far bands `256` ULP. The root window keeps
+/// its absolute floor: CUDA/HIP `2e-7`, WGSL `3e-7`. The HIP row remains
+/// unconfirmed on hardware; these targets have no portable composition proof.
+/// WGSL combines the erfc and Gaussian terms before halving, so the normal
+/// result at `-13` does not depend on a subnormal half-erfc intermediate.
+/// Tail selection follows final reference normality, including the last
+/// normal-result input. Below `-13`, a scaled Gaussian composer avoids
+/// subnormal erfc/Gaussian intermediates. Source/reference checks do not
+/// establish device or portable accuracy. CUDA and HIP retain
+/// their IEEE tail sweep.
 pub fn assert_gelu_grad_sweep<D, E>(device: &D, ops: &E, dialect: SweepDialect)
 where
     D: ComputeDevice,
@@ -119,10 +137,10 @@ where
     // dialects sweep them.
     let (main, root, mid, far) = if dialect == SweepDialect::Wgsl {
         (
-            above_flush_floor(&without_subnormals(&main), -12.5),
-            above_flush_floor(&without_subnormals(&root), -12.5),
-            above_flush_floor(&without_subnormals(&mid), -12.5),
-            above_flush_floor(&without_subnormals(&far), -12.5),
+            wgsl_inputs(&main),
+            wgsl_inputs(&root),
+            wgsl_inputs(&mid),
+            wgsl_inputs(&far),
         )
     } else {
         (main, root, mid, far)
@@ -137,4 +155,46 @@ where
     );
     assert_unary_sweep_within::<D, E, GeluGradOp>(device, ops, "gelu-grad-mid", &mid, mid_ulp);
     assert_unary_sweep_within::<D, E, GeluGradOp>(device, ops, "gelu-grad-far", &far, far_ulp);
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use hephaestus_core::UnaryValue;
+
+    #[test]
+    fn wgsl_sweep_keeps_directed_normal_gelu_gradient_tails() {
+        let inputs = wgsl_inputs(&far_inputs());
+        for x in [
+            -12.6,
+            -13.0,
+            -13.1,
+            -13.3,
+            f32::from_bits(0xc155_7858),
+            f32::from_bits(0xc155_7859),
+        ] {
+            assert!(GeluGradOp::apply(f64::from(x)).abs() >= f64::from(f32::MIN_POSITIVE));
+            assert!(
+                inputs.contains(&x),
+                "normal GELU-gradient tail removed at {x}"
+            );
+        }
+        let next = f32::from_bits(0xc155_785a);
+        assert!(GeluGradOp::apply(f64::from(next)).abs() < f64::from(f32::MIN_POSITIVE));
+        assert!(!inputs.contains(&next));
+    }
+
+    #[test]
+    fn wgsl_selection_preserves_existing_gelu_gradient_coverage_and_specials() {
+        for inputs in [main_inputs(), root_inputs(), mid_inputs(), far_inputs()] {
+            let selected = wgsl_inputs(&inputs);
+            let previous =
+                super::super::runner::with_normal_erfc_result(&without_subnormals(&inputs), |x| {
+                    -x * core::f32::consts::FRAC_1_SQRT_2
+                });
+            for x in previous {
+                assert!(selected.iter().any(|y| y.to_bits() == x.to_bits()));
+            }
+        }
+    }
 }

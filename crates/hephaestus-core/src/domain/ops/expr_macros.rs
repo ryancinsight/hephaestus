@@ -89,16 +89,11 @@ macro_rules! wgsl_erfc_nr_t {
     };
 }
 
-macro_rules! wgsl_erfc_nr_pos {
+// Shared exponent correction for erfc(z) and exp(z*z)*erfc(z), z >= 0.
+macro_rules! wgsl_erfc_nr_correction {
     ($z:literal) => {
         concat!(
-            "(",
-            wgsl_erfc_nr_t!($z),
-            " * exp(-(",
-            $z,
-            ") * (",
-            $z,
-            ") - 1.26551223 + ",
+            "- 1.26551223 + ",
             wgsl_erfc_nr_t!($z),
             " * (1.00002368 + ",
             wgsl_erfc_nr_t!($z),
@@ -117,7 +112,35 @@ macro_rules! wgsl_erfc_nr_pos {
             " * (-0.82215223 + ",
             wgsl_erfc_nr_t!($z),
             " * 0.17087277",
-            "))))))))))"
+            "))))))))"
+        )
+    };
+}
+
+macro_rules! wgsl_erfc_nr_pos {
+    ($z:literal) => {
+        concat!(
+            "(",
+            wgsl_erfc_nr_t!($z),
+            " * exp(-(",
+            $z,
+            ") * (",
+            $z,
+            ") ",
+            wgsl_erfc_nr_correction!($z),
+            "))"
+        )
+    };
+}
+
+macro_rules! wgsl_erfcx_nr_pos {
+    ($z:literal) => {
+        concat!(
+            "(",
+            wgsl_erfc_nr_t!($z),
+            " * exp(",
+            wgsl_erfc_nr_correction!($z),
+            "))"
         )
     };
 }
