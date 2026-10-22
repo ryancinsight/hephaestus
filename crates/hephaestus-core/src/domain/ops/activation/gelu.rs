@@ -12,12 +12,60 @@ use crate::domain::dialect::{CudaC, Wgsl};
 // keeps one argument and one composer shared with the grad term.
 macro_rules! wgsl_gelu_erfc_expr {
     () => {
+        wgsl_gelu_erfc_expr!(wgsl_erfc_nr_pos!("(abs((x)) * 0.7071067811865476)"))
+    };
+    ($positive:expr) => {
         concat!(
             "select((2.0 - ",
-            wgsl_erfc_nr_pos!("(abs((x)) * 0.7071067811865476)"),
+            $positive,
             "), ",
-            wgsl_erfc_nr_pos!("(abs((x)) * 0.7071067811865476)"),
+            $positive,
             ", (x) <= 0.0)"
+        )
+    };
+}
+
+// In the existing far band x < -7, rounding x/sqrt(2) before squaring
+// amplifies argument error in the erfc exponent. Factor out exp(-x*x/2)
+// using the same Chebyshev correction, so that rounded argument only enters
+// the slowly varying correction. The Gaussian also stays normal throughout
+// the normal-result GELU tail when the erfc intermediate becomes subnormal.
+macro_rules! wgsl_gelu_tail_expr {
+    ($exponential:expr) => {
+        concat!(
+            "((0.5 * (x) * ",
+            wgsl_erfcx_nr_pos!("(abs((x)) * 0.7071067811865476)"),
+            ") * ",
+            $exponential,
+            ")"
+        )
+    };
+}
+
+// Select the exact existing exponent argument before exp. Whichever outer
+// branch is selected receives its original argument and product grouping:
+// regular exp(r), or (0.5*x*(t*exp(correction)))*exp(-0.5*x*x) in the far band.
+// This shares a pure exp input; actual backend CSE and speed remain unmeasured.
+macro_rules! wgsl_gelu_shared_exp {
+    () => {
+        concat!(
+            "exp(select(",
+            wgsl_erfc_nr_exp_argument!("(abs((x)) * 0.7071067811865476)"),
+            ", -(0.5 * (x) * (x)), (x) < -7.0))"
+        )
+    };
+}
+
+// The gradient stays normal after even exp(-x*x/2) becomes subnormal.
+// Scale that Gaussian by 512 inside exp and fold the reciprocal into both
+// coefficients: 0.5/512 and 1/(512*sqrt(2*pi)). No subnormal intermediate
+// is needed for a normal final result; there is no product h*h to regroup.
+macro_rules! wgsl_gelu_grad_tail_expr {
+    () => {
+        concat!(
+            "((0.0009765625 * ",
+            wgsl_erfcx_nr_pos!("(abs((x)) * 0.7071067811865476)"),
+            " + (x) * 0.0007791841414090482) * exp(-(0.5 * (x) * (x)) + 6.238324625039508))"
         )
     };
 }
@@ -29,9 +77,14 @@ macro_rules! wgsl_gelu_erfc_expr {
 // (unsuffixed, so lane promotion keeps f64 served).
 impl UnaryExpr<Wgsl> for GeluOp {
     const EXPR: &'static str = concat!(
-        "select((0.5 * (x) * ",
-        wgsl_gelu_erfc_expr!(),
-        "), -0.0, (x) < -3.402823466e+38)"
+        "select(select((0.5 * (x) * ",
+        wgsl_gelu_erfc_expr!(wgsl_erfc_nr_pos_with_exp!(
+            "(abs((x)) * 0.7071067811865476)",
+            wgsl_gelu_shared_exp!()
+        )),
+        "), ",
+        wgsl_gelu_tail_expr!(wgsl_gelu_shared_exp!()),
+        ", (x) < -7.0), -0.0, (x) < -3.402823466e+38)"
     );
     const SUPPORTS_F64: bool = false;
 }
@@ -42,13 +95,19 @@ impl UnaryExpr<CudaC> for GeluOp {
 // Exact GELU gradient: the `Φ` term reuses `GeluOp`'s Chebyshev composer
 // verbatim — zero new coefficients — and adds the Gaussian term once
 // (it needs no correction: its decay is the true asymptotic). Both
-// infinities guard explicitly. The C spelling likewise calls the native
-// `erfc`/`exp` builtins unsuffixed.
+// infinities guard explicitly. WGSL combines the two normal terms before
+// halving: at x=-13, erfc is normal but 0.5*erfc is subnormal and may flush
+// even though the final gradient is normal. Below -13 the scaled Gaussian
+// composer also covers normal results with subnormal erfc/Gaussian factors.
+// The C spelling retains native
+// `erfc`/`exp` and its IEEE intermediate behavior.
 impl UnaryExpr<Wgsl> for GeluGradOp {
     const EXPR: &'static str = concat!(
-        "select(select((0.5 * ",
+        "select(select(select((0.5 * (",
         wgsl_gelu_erfc_expr!(),
-        " + (x) * exp(-(0.5 * (x) * (x))) * 0.3989422804014327), 1.0, (x) > 3.402823466e+38), 0.0, (x) < -3.402823466e+38)"
+        " + (x) * (2.0 * exp(-(0.5 * (x) * (x)))) * 0.3989422804014327)), ",
+        wgsl_gelu_grad_tail_expr!(),
+        ", (x) < -13.0), 1.0, (x) > 3.402823466e+38), 0.0, (x) < -3.402823466e+38)"
     );
     const SUPPORTS_F64: bool = false;
 }

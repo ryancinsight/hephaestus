@@ -52,6 +52,9 @@ fn device_or_skip() -> Option<WgpuDevice> {
 #[path = "accuracy_sweeps.rs"]
 mod accuracy_sweeps;
 
+#[path = "intrinsic_qualification.rs"]
+mod intrinsic_qualification;
+
 #[path = "adaptive_pooling_contracts.rs"]
 mod adaptive_pooling_contracts;
 

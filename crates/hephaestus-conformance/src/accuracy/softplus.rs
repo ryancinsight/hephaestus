@@ -31,10 +31,13 @@ fn main_inputs() -> Vec<f32> {
         &[
             88.72, // just below ln(FLT_MAX): finite
             88.73, // just past it: the value stays finite
-            89.0, 100.0, // overflow interior: the value is ~x
+            89.0,
+            100.0, // overflow interior: the value is ~x
             -10.0, // tail-band handoff (also covered by the tail sweep)
-            -1.0, 1.0, // curvature interior
-            0.0, // +0 (the builder adds -0)
+            -1.0,
+            1.0,                         // curvature interior
+            f32::from_bits(0xc100_0000), // exact allowed-exp countermodel (-8)
+            0.0,                         // +0 (the builder adds -0)
         ],
     );
     inputs.extend(sweep_inputs(10.0, 110.0, 512, &[]));
@@ -112,4 +115,27 @@ where
     };
     assert_unary_sweep_within::<D, E, SoftplusOp>(device, ops, "softplus", &main, max_ulp);
     assert_unary_sweep_within::<D, E, SoftplusOp>(device, ops, "softplus-tail", &tail, tail_ulp);
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn wgsl_sweep_retains_intrinsic_countermodel() {
+        let _trace = super::super::runner::trace();
+        let _assert = tracing::info_span!(
+            "assert",
+            op = "softplus",
+            contract = "exact_countermodel_selection"
+        )
+        .entered();
+        let witness = f32::from_bits(0xc100_0000);
+        let inputs = above_flush_floor(&without_subnormals(&main_inputs()), -87.0);
+        assert!(
+            inputs.contains(&witness),
+            "exact intrinsic countermodel input removed: {:08x}",
+            witness.to_bits()
+        );
+    }
 }

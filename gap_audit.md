@@ -1,5 +1,77 @@
 # Gap Audit - hephaestus
 
+## [HEPH-KERNEL-TAIL-ACCURACY] Shipped 0.26 residual findings [patch] — open
+
+- Shipped 0.26.0 ([PR #507](https://github.com/ryancinsight/hephaestus/pull/507)) retains excluded
+  normal tails, finite WGSL GELU-tanh-gradient overflow, and six refuted or
+  unproved portable composition targets. The private 0.27.1 correction
+  bounds eager operands, restores directed reference-normal erfc coverage,
+  and groups GELU-gradient terms before halving at -13. Existing tolerance
+  gates, C/HIP expressions and public value-function contracts remain.
+- Post-draft evidence: automatic WGPU contracts on
+  [PR #509](https://github.com/ryancinsight/hephaestus/pull/509) at the reviewed forwarding head
+  pass all 116; Metal retains three GELU-tanh-gradient NaN violations.
+  The private follow-up shares one magnitude predicate for bounded operands
+  and saturation, removing clamp/self-equality and a separate negative guard.
+  Native models and optimizer stress observations support this mechanism;
+  actual Metal compilation/execution and independent review remain pending.
+  Those are historical failures. The subsequent independently reviewed
+  magnitude-selection head ec650afe passes all six automatic workflows.
+  That evidence does not qualify this later private normal-tail delta.
+  The earlier failures and every threshold remain unchanged.
+- Normal-tail source follow-up: final-reference selection and a shared
+  scaled-erfc correction cover the formerly excluded normal-result interval
+  in CPU arithmetic models. The gradient uses a Gaussian scaled by 512
+  inside exp, with reciprocal scaling folded into its coefficients. Directed
+  last-normal controls retain the unchanged 256 ULP target. Independent
+  review, actual backend execution and compiler/performance qualification of
+  this private delta remain open. Portable-bound design stays separate; no
+  tolerance increase resolves allowed-intrinsic countermodels.
+- Far-band source provider `838cf7ab` selects the existing factored GELU path
+  below -7, with the gradient unchanged below -13. Run `39520852311`'s four
+  normal-result misses and -7 neighbors remain as regressions. Exact5e hosted
+  run `39527890349` has independently accepted observed numerical results,
+  complete BHHB measurements and P1 performance hold: GELU tail1M pooled H/B
+  1.35333. The one-VM Apple Paravirtual cohort does not identify physical
+  backing/native JIT or establish portable guarantees. Source-equivalent838
+  package and five Mac/six Linux API evidence do not transfer to a new source.
+- New private provider `c0aa1bdc` shares the selected GELU exp argument without
+  changing its selector, coefficients or strict modeled selected arithmetic.
+  Raw Naga/MSL exp count remains4→4; distinct inputs fall3→2. Downstream CSE
+  is a hypothesis, not measured speedup or JIT proof. New source review,
+  affected package/API/backend and matched performance evidence remain open.
+  Public #509 a735 stays unchanged; #510 is validation only. Old failures,
+  predicates, numerical targets and budgets remain intact.
+- Replicated measurement controls remain private: mandatory BHHB then fixed
+  HBBH uses the same two future-job binaries, unchanged cases/checks/budgets and
+  a shared deadline. Current150 numeric success supplies no P1 performance pass;
+  both block distributions/drift and new exact helper/cohort review are required.
+  Incomplete second blocks cannot supply selected favorable performance evidence.
+- The private observed-cohort proposal adds explicit six-witness fixtures and
+  retained actual-value/source/lock/adapter diagnostics, preserving every target
+  and production expression. Five selection guards fail on the base; SiLU -6
+  already occurs in its dense grid. Qualification remains pending actual
+  device results, reviewed identity limits and owner/coordinator acceptance.
+- Evidence boundary: final shipped sampled WGPU/Metal passes remain valid;
+  historical Mish failures are not final-source failures. Local directed
+  Metal acquisition returns AdapterUnavailable before dispatch (0/27 lanes),
+  and no alternative acquisition is attempted. CPU models are not GPU output.
+- Hosted continuation: a separate validation-only draft can use the existing
+  automatic GitHub-hosted Metal workflow without new access or runners. Its
+  relocatable comparison runs after the unchanged complete suite and exact
+  witness diagnostics on one VM, preserving runtime budgets, output checks
+  and raw noise. This path supplies no acceptance until actual records and
+  source/adapter/compiler limits are independently reviewed; software WGPU
+  remains software evidence. The local unavailable acquisition is not retried.
+- Closure: exact private-diff review, applicable unchanged gates and device
+  execution, owner/base reconciliation, current consumer qualification,
+  and authorized lifecycle actions remain pending. See the restored
+  [backlog anchor](backlog.md#heph-kernel-tail-accuracy),
+  [analysis](docs/verification/accuracy/design.md), and
+  [checklist](docs/verification/accuracy/checklist.md).
+
+
+
 ## [HEPH-EUNOMIA-010-COHORT] Default-source graph [minor]
 
 - Finding: default numeric providers advance beyond the 0.21 consumer's 0.9/0.2 requirements. The 0.22 candidate aligns Eunomia 0.10, Aequitas 0.3, Leto 0.46 and Moirai-sync 0.9.3 without altering Rust sources.
