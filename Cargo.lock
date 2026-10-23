@@ -607,7 +607,7 @@ dependencies = [
 
 [[package]]
 name = "hephaestus-cuda"
-version = "0.27.0"
+version = "0.27.1"
 dependencies = [
  "aequitas",
  "eunomia",
@@ -681,7 +681,7 @@ dependencies = [
 
 [[package]]
 name = "hephaestus-wgpu"
-version = "0.27.0"
+version = "0.27.1"
 dependencies = [
  "aequitas",
  "criterion",
