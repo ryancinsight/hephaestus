@@ -3,9 +3,9 @@ name: WGPU Backend
 on:
   push:
     branches: [master]
-    paths: ["crates/hephaestus-wgpu/**", "crates/hephaestus-core/**", "Cargo.toml", "Cargo.lock", ".github/workflows/wgpu.yml"]
+    paths: ["crates/hephaestus-wgpu/**", "crates/hephaestus-core/**", "crates/hephaestus-conformance/**", "Cargo.toml", "Cargo.lock", ".github/workflows/wgpu.yml", ".github/scripts/intrinsic_qualification_identity.py"]
   pull_request:
-    paths: ["crates/hephaestus-wgpu/**", "crates/hephaestus-core/**", "Cargo.toml", "Cargo.lock", ".github/workflows/wgpu.yml"]
+    paths: ["crates/hephaestus-wgpu/**", "crates/hephaestus-core/**", "crates/hephaestus-conformance/**", "Cargo.toml", "Cargo.lock", ".github/workflows/wgpu.yml", ".github/scripts/intrinsic_qualification_identity.py"]
   workflow_dispatch:
 
 permissions:
@@ -77,3 +77,17 @@ jobs:
           cargo "+$RUST_TOOLCHAIN" doc --package hephaestus-wgpu --no-deps --locked
           timeout 60s cargo "+$RUST_TOOLCHAIN" test --package hephaestus-wgpu \
             --bench fft_prepared --locked -- --test
+
+      - name: Retain exact intrinsic witness qualification diagnostics
+        working-directory: hephaestus
+        env:
+          HEPHAESTUS_WGPU_REQUIRE_DEVICE: "1"
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 .github/scripts/intrinsic_qualification_identity.py
+          # Additional focused evidence; the full mandatory suites above stay unchanged.
+          # Nextest retains the existing 60-second termination bound.
+          cargo "+$RUST_TOOLCHAIN" nextest run --package hephaestus-wgpu \
+            --test contracts --locked --success-output immediate \
+            --test-threads 1 -- --exact intrinsic_qualification::exact_intrinsic_witness_qualification

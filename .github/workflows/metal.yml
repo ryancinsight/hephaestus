@@ -3,9 +3,9 @@ name: Metal Backend
 on:
   push:
     branches: [master]
-    paths: ["crates/hephaestus-metal/**", "crates/hephaestus-wgpu/**", "crates/hephaestus-core/**", "crates/hephaestus-conformance/**", "crates/hephaestus/**", "Cargo.toml", "Cargo.lock", "rust-toolchain.toml", ".config/nextest.toml", ".github/workflows/metal.yml"]
+    paths: ["crates/hephaestus-metal/**", "crates/hephaestus-wgpu/**", "crates/hephaestus-core/**", "crates/hephaestus-conformance/**", "crates/hephaestus/**", "Cargo.toml", "Cargo.lock", "rust-toolchain.toml", ".config/nextest.toml", ".github/workflows/metal.yml", ".github/scripts/intrinsic_qualification_identity.py", ".github/validation/activation/**"]
   pull_request:
-    paths: ["crates/hephaestus-metal/**", "crates/hephaestus-wgpu/**", "crates/hephaestus-core/**", "crates/hephaestus-conformance/**", "crates/hephaestus/**", "Cargo.toml", "Cargo.lock", "rust-toolchain.toml", ".config/nextest.toml", ".github/workflows/metal.yml"]
+    paths: ["crates/hephaestus-metal/**", "crates/hephaestus-wgpu/**", "crates/hephaestus-core/**", "crates/hephaestus-conformance/**", "crates/hephaestus/**", "Cargo.toml", "Cargo.lock", "rust-toolchain.toml", ".config/nextest.toml", ".github/workflows/metal.yml", ".github/scripts/intrinsic_qualification_identity.py", ".github/validation/activation/**"]
   workflow_dispatch:
 
 permissions:
@@ -29,6 +29,18 @@ jobs:
     runs-on: macos-15
     timeout-minutes: 45
     steps:
+      - name: Record the early validation budget origin
+        shell: bash
+        run: |
+          set -euo pipefail
+          validation_started_epoch="$(date +%s)"
+          validation_artifacts="$RUNNER_TEMP/hephaestus-activation-validation-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT"
+          mkdir -p "$validation_artifacts"
+          printf 'HEPHAESTUS_METAL_JOB_STARTED_EPOCH=%s\n' "$validation_started_epoch" >> "$GITHUB_ENV"
+          printf 'HEPHAESTUS_METAL_VALIDATION_ARTIFACTS=%s\n' "$validation_artifacts" >> "$GITHUB_ENV"
+          printf '{"origin_epoch":%s,"origin":"first workflow step; runner initialization is earlier","job_budget_seconds":2700,"artifact_reserve_seconds":120,"setup_margin_seconds":60}\n' \
+            "$validation_started_epoch" > "$validation_artifacts/job-budget.json"
+
       - name: Check out Hephaestus
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -88,3 +100,51 @@ jobs:
             --doc --locked
           cargo "+$RUST_TOOLCHAIN" doc --package hephaestus-wgpu --package hephaestus-metal \
             --no-deps --locked
+
+      - name: Retain exact intrinsic witness qualification diagnostics
+        working-directory: hephaestus
+        env:
+          WGPU_BACKEND: "metal"
+          HEPHAESTUS_WGPU_REQUIRE_DEVICE: "1"
+          HEPHAESTUS_METAL_REQUIRE_DEVICE: "1"
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 .github/scripts/intrinsic_qualification_identity.py | \
+            tee "$HEPHAESTUS_METAL_VALIDATION_ARTIFACTS/cohort-provenance.json"
+          # Additional focused evidence; the full mandatory suites above stay unchanged.
+          # Nextest retains the existing 60-second termination bound.
+          cargo "+$RUST_TOOLCHAIN" nextest run --package hephaestus-wgpu \
+            --test contracts --locked --success-output immediate \
+            --test-threads 1 -- --exact intrinsic_qualification::exact_intrinsic_witness_qualification \
+            2>&1 | tee "$HEPHAESTUS_METAL_VALIDATION_ARTIFACTS/witness-nextest.log"
+
+      - name: Compare the reviewed activation revisions on this Metal cohort
+        if: ${{ success() && github.event_name == 'pull_request' }}
+        timeout-minutes: 22
+        working-directory: hephaestus
+        env:
+          WGPU_BACKEND: "metal"
+          HEPHAESTUS_WGPU_REQUIRE_DEVICE: "1"
+          HEPHAESTUS_METAL_REQUIRE_DEVICE: "1"
+          HEPHAESTUS_HOSTED_ACTIVATION_INTENT: reviewed-metal-validation
+          CARGO_BUILD_JOBS: "2"
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 .github/validation/activation/run.py --hosted \
+            --source "$PWD" \
+            --work-root "$RUNNER_TEMP/hephaestus-activation-work-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT" \
+            --artifacts "$HEPHAESTUS_METAL_VALIDATION_ARTIFACTS"
+
+      - name: Preserve Metal qualification and comparison evidence
+        if: ${{ always() && github.event_name == 'pull_request' }}
+        timeout-minutes: 2
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
+        with:
+          name: hephaestus-metal-validation-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/hephaestus-activation-validation-${{ github.run_id }}-${{ github.run_attempt }}
+          if-no-files-found: error
+          retention-days: 7
+          overwrite: false
+          include-hidden-files: false

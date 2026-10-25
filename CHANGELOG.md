@@ -1,5 +1,71 @@
 # Changelog
 
+## [0.27.1] - Unreleased
+
+### Fixed
+
+- [patch] Use one magnitude predicate for bounded WGSL GELU-tanh-gradient
+  operands and saturation. Remove the clamp/self-equality dependency and
+  separate negative comparison implicated by retained NaN failures. Preserve
+  native scalar typing, structural controls and thresholds. The accepted
+  magnitude-selection source passes its six automatic workflows; that
+  evidence does not qualify the later private normal-tail correction.
+
+- [patch] Bound WGSL GELU-tanh-gradient operands before eager polynomial
+  evaluation and use a nonoverflowing sigmoid product. Finite saturated
+  inputs keep their rounded zero/one limits, including both signs of
+  `1e20`, `1e30`, and the largest finite binary32 value.
+- [patch] Extend WGSL GELU/gradient sweeps through their final normal
+  reference results, retaining directed last-normal and adjacent subnormal
+  controls. Below `-13`, factor the shared erfc correction from the Gaussian;
+  scale the gradient Gaussian by 512 and fold its reciprocal into the
+  coefficients to avoid subnormal intermediates. Preserve native scalar
+  typing, C/HIP expressions and every ULP/absolute target. CPU reference
+  verification does not establish device, compiler or performance acceptance.
+
+- [patch] Extend the existing factored WGSL GELU path to its -7 far-band
+  boundary after four normal-result failures occur in base and prior head.
+  Retain those inputs, -7 neighbors and the gradient's -13 handoff. Exact5e/
+  provider838 hosted run39527890349 has accepted observed numerical results;
+  matched performance remains P1-held (tail1M pooled H/B1.35333), with physical,
+  native-JIT and portable limits. Its package/API evidence stays source-scoped.
+- [patch] Prepare selected-exp sharing for a new immutable providerc0aa cohort.
+  Preserve coefficients, selected arithmetic in strict models, all fixtures and
+  targets. Naga/MSL still emits four exp calls; distinct inputs decrease3→2.
+  Downstream CSE remains a hypothesis requiring fresh exact source review,
+  affected package/API/backend checks and matched measurements. No speedup,
+  JIT or release acceptance is inferred; public #509 stays unchanged.
+
+### Added
+
+- [patch] Add private BHHB/HBBH measurement controls using the same two
+  future-job binaries, fixed cases/checks and unchanged resource budgets.
+  Retain both blocks and all process drift; incomplete blocks cannot produce
+  a performance result. Exact helper review and a new automatic cohort remain
+  pending; no production/API change or speedup acceptance follows.
+- [patch] Emit validation protocol records through explicit line-buffered I/O.
+  Preserve record values and timing controls; write or flush failures use a
+  fatal status distinct from numerical failures and unavailable adapters.
+- [patch] Prepare a relocatable, PR-only matched activation comparison after
+  the complete hosted Metal suite and exact-witness diagnostics. Preserve
+  base/head source, compiler, adapter and raw timing identities on one VM,
+  existing numerical targets and job/test budgets. Actual results and
+  reviewed cohort/performance acceptance remain required.
+- [patch] Retain exact inputs for the six allowed-intrinsic countermodels in
+  existing accuracy sweeps. Add a focused canonical-WGPU test and retained
+  success diagnostics with actual values, unchanged targets, expressions and
+  adapter/source/lock/toolchain identity. Observed-cohort qualification remains
+  pending actual results, independent review and owner/coordinator acceptance.
+
+### Verification limits
+
+- [patch] Track all three shipped 0.26 findings in the kernel-tail backlog.
+  Existing sampled WGSL targets lack a portable composition proof; six
+  allowed-intrinsic countermodels remain open. CPU arithmetic/source checks
+  do not establish device accuracy or performance. No release is qualified
+  by this private correction alone.
+
+
 ## [0.27.0] - Unreleased
 
 ### Added

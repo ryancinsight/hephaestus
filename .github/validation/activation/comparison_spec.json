@@ -1,0 +1,72 @@
+{
+  "schema": 1,
+  "repository": "ryancinsight/hephaestus",
+  "toolchain": "1.95.0",
+  "cohorts": {
+    "base": {
+      "revision": "6f4dd9b942d083a8183fc56c3502c8d8322277d1",
+      "tree": "fd2a98e66ec68c0a436b54e41e1060b8bfe63f51",
+      "expression_sha256": "6cf8e97bb49241364d98692cc56f2c736d9c3b9cf3fff1f346566881894cd288",
+      "external_package_graph_sha256": "c5a2c2e7febf568e9efd1c8938679973aa1f6ced6e5c0fa32ac2ff9332122515",
+      "external_packages": 228
+    },
+    "head": {
+      "revision": "c0aa1bdc9a91f876a198700235ed2b2e6197d0db",
+      "tree": "6c8ab23559daffa9a74a9b53f85b8a6cca128bfd",
+      "expression_sha256": "00d4e13899578add86b20e28cbdd839d4dbae15b0405e40a77e97b6e6dff14ed",
+      "external_package_graph_sha256": "c5a2c2e7febf568e9efd1c8938679973aa1f6ced6e5c0fa32ac2ff9332122515",
+      "external_packages": 228
+    }
+  },
+  "operations": [
+    "GeluOp",
+    "GeluGradOp",
+    "GeluTanhGradOp"
+  ],
+  "expression_exports": {
+    "operators": 8,
+    "dialects": 3
+  },
+  "sizes": [
+    65536,
+    1048576
+  ],
+  "samples": 9,
+  "batch": 8,
+  "warmups": 2,
+  "seed_linspace_points": 4096,
+  "bands": [
+    "ordinary",
+    "tail",
+    "finite-saturation"
+  ],
+  "order": [
+    "base",
+    "head",
+    "head",
+    "base"
+  ],
+  "replication_order": [
+    "head",
+    "base",
+    "base",
+    "head"
+  ],
+  "budgets": {
+    "job_seconds": 2700,
+    "phase_seconds": 1320,
+    "artifact_reserve_seconds": 120,
+    "build_seconds": 300,
+    "export_manifest_seconds": 30,
+    "invocation_seconds": 120,
+    "wait_seconds": 15,
+    "build_jobs": 2,
+    "artifact_bytes": 104857600,
+    "setup_margin_seconds": 60
+  },
+  "timing_scope": "public dispatch plus device completion; excludes upload/readback/compilation",
+  "numerical_bounds": "unchanged existing per-input bands and joint shared-root endpoints",
+  "memory_contract": "fixed1048576-element maximum; logical case-owned host/device buffers plus seeds/references/failure summaries <=17MiB; driver/compiler/staging caches additional, measured childRSS; no hard OS RSS/AS enforcement",
+  "expected_baseline_predicates": "baseline_failures.json",
+  "baseline_prediction_scope": "Fixed exact input-bit/failure-class predicates from actual baseline expression CPU RNE/FTZ models; no blanket baseline exit1 exception"
+}
