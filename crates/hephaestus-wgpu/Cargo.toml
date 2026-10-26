@@ -3,9 +3,8 @@ name = "hephaestus-wgpu"
 autotests = false
 # Explicit rather than `workspace = true`: this crate's published dependency on
 # `moirai-sync` moved from ^0.10 to ^0.11, which changes its manifest contract
-# without changing its API, so it takes a patch release while the rest of the
-# cohort stays at 0.27.0. Consumers requiring `0.27.0` keep resolving.
-version = "0.27.1"
+# without changing its API; it rejoins the cohort at 0.28.0.
+version = "0.28.0"
 rust-version.workspace = true
 edition.workspace = true
 authors.workspace = true
