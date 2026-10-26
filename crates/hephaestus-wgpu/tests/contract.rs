@@ -21,6 +21,10 @@ mod storage;
 #[path = "contract/transfer.rs"]
 mod transfer;
 
+use aequitas::systems::si::{
+    quantities::{Length, MassDensity, Time, Velocity},
+    units::{KilogramPerCubicMeter, Meter, MeterPerSecond, Second},
+};
 use eunomia::Zeroable;
 use hephaestus_core::{BlockWidth, Fdtd3dOps, Fdtd3dParams, FdtdMedium, FdtdVelocity};
 use hephaestus_wgpu::{

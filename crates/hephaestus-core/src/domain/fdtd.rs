@@ -1,5 +1,9 @@
 //! Provider-neutral three-dimensional acoustic FDTD contracts.
 
+use aequitas::systems::si::{
+    quantities::{Length, MassDensity, Time, Velocity},
+    units::{KilogramPerCubicMeter, Meter, MeterPerSecond, Second},
+};
 use eunomia::{Pod, Zeroable};
 
 use crate::{ComputeDevice, HephaestusError, Result};
@@ -28,11 +32,17 @@ pub struct FdtdMedium {
 impl FdtdMedium {
     /// Construct validated density and sound-speed properties.
     ///
+    /// Density crosses the boundary as [`MassDensity`] and sound speed as
+    /// [`Velocity`]; both are reduced once to SI base units in `f32`.
+    /// Storage stays plain `f32` for direct parameter-block upload.
+    ///
     /// # Errors
     ///
     /// Returns [`HephaestusError::InvalidConfiguration`] when either value is
     /// non-finite or not strictly positive.
-    pub fn new(density: f32, sound_speed: f32) -> Result<Self> {
+    pub fn new(density: MassDensity<f32>, sound_speed: Velocity<f32>) -> Result<Self> {
+        let density = density.in_unit::<KilogramPerCubicMeter>();
+        let sound_speed = sound_speed.in_unit::<MeterPerSecond>();
         if !density.is_finite() || density <= 0.0 {
             return Err(HephaestusError::InvalidConfiguration {
                 message: format!("FDTD density must be finite and positive: {density}"),
@@ -66,8 +76,12 @@ impl FdtdMedium {
 ///
 /// The provider contract is explicitly `f32`: WGPU storage kernels do not
 /// guarantee `f64`, and a provider that cannot honor the precision must reject
-/// acquisition rather than widen and narrow silently. The timestep remains
-/// subject to the caller's acoustic CFL analysis for its medium and grid.
+/// acquisition rather than widen and narrow silently. Spacings cross the
+/// boundary as [`Length`] and the timestep as [`Time`], reduced once to SI
+/// base units (metres, seconds) in `f32`; storage stays plain `f32` for
+/// direct parameter-block upload. The timestep remains subject to the
+/// caller's acoustic CFL analysis for its medium and grid: the CFL number
+/// `c·dt/dx` is dimensionless, and sound speed lives in the medium, not here.
 #[repr(C)]
 #[derive(Clone, Copy, Debug, PartialEq, Pod, Zeroable)]
 pub struct Fdtd3dParams {
@@ -86,12 +100,24 @@ impl Fdtd3dParams {
     ///
     /// Returns [`HephaestusError::InvalidConfiguration`] for invalid geometry,
     /// timestep, or flattened storage size.
-    pub fn new(nx: u32, ny: u32, nz: u32, dx: f32, dy: f32, dz: f32, dt: f32) -> Result<Self> {
+    pub fn new(
+        nx: u32,
+        ny: u32,
+        nz: u32,
+        dx: Length<f32>,
+        dy: Length<f32>,
+        dz: Length<f32>,
+        dt: Time<f32>,
+    ) -> Result<Self> {
         if nx < 3 || ny < 3 || nz < 3 {
             return Err(HephaestusError::InvalidConfiguration {
                 message: format!("FDTD dimensions must be at least 3: ({nx}, {ny}, {nz})"),
             });
         }
+        let dx = dx.in_unit::<Meter>();
+        let dy = dy.in_unit::<Meter>();
+        let dz = dz.in_unit::<Meter>();
+        let dt = dt.in_unit::<Second>();
         for (name, value) in [("dx", dx), ("dy", dy), ("dz", dz), ("dt", dt)] {
             if !value.is_finite() || value <= 0.0 {
                 return Err(HephaestusError::InvalidConfiguration {
@@ -135,25 +161,25 @@ impl Fdtd3dParams {
         self.dimensions[2]
     }
 
-    /// Return the x-axis spacing.
+    /// Return the x-axis spacing in metres.
     #[must_use]
     pub const fn dx(self) -> f32 {
         self.spacing_dt[0]
     }
 
-    /// Return the y-axis spacing.
+    /// Return the y-axis spacing in metres.
     #[must_use]
     pub const fn dy(self) -> f32 {
         self.spacing_dt[1]
     }
 
-    /// Return the z-axis spacing.
+    /// Return the z-axis spacing in metres.
     #[must_use]
     pub const fn dz(self) -> f32 {
         self.spacing_dt[2]
     }
 
-    /// Return the explicit Euler timestep.
+    /// Return the explicit Euler timestep in seconds.
     #[must_use]
     pub const fn dt(self) -> f32 {
         self.spacing_dt[3]
@@ -247,7 +273,16 @@ mod tests {
 
     #[test]
     fn validates_geometry_and_storage() {
-        let params = Fdtd3dParams::new(4, 5, 6, 0.1, 0.2, 0.3, 1.0e-5).expect("valid grid");
+        let params = Fdtd3dParams::new(
+            4,
+            5,
+            6,
+            Length::from_unit::<Meter>(0.1),
+            Length::from_unit::<Meter>(0.2),
+            Length::from_unit::<Meter>(0.3),
+            Time::from_unit::<Second>(1.0e-5),
+        )
+        .expect("valid grid");
         assert_eq!((params.nx(), params.ny(), params.nz()), (4, 5, 6));
         assert_eq!(params.storage_len().expect("valid storage"), 120);
         params
@@ -261,19 +296,36 @@ mod tests {
 
     #[test]
     fn rejects_invalid_geometry_and_medium() {
+        let metre = Length::from_unit::<Meter>(1.0);
+        let second = Time::from_unit::<Second>(1.0);
         assert!(matches!(
-            Fdtd3dParams::new(2, 4, 4, 1.0, 1.0, 1.0, 1.0),
+            Fdtd3dParams::new(2, 4, 4, metre, metre, metre, second),
             Err(HephaestusError::InvalidConfiguration { .. })
         ));
         assert!(matches!(
-            Fdtd3dParams::new(4, 4, 4, 0.0, 1.0, 1.0, 1.0),
+            Fdtd3dParams::new(
+                4,
+                4,
+                4,
+                Length::from_unit::<Meter>(0.0),
+                metre,
+                metre,
+                second
+            ),
             Err(HephaestusError::InvalidConfiguration { .. })
         ));
         assert!(matches!(
-            FdtdMedium::new(f32::NAN, 1500.0),
+            FdtdMedium::new(
+                MassDensity::from_unit::<KilogramPerCubicMeter>(f32::NAN),
+                Velocity::from_unit::<MeterPerSecond>(1500.0),
+            ),
             Err(HephaestusError::InvalidConfiguration { .. })
         ));
-        let medium = FdtdMedium::new(1000.0, 1500.0).expect("valid medium");
+        let medium = FdtdMedium::new(
+            MassDensity::from_unit::<KilogramPerCubicMeter>(1000.0),
+            Velocity::from_unit::<MeterPerSecond>(1500.0),
+        )
+        .expect("valid medium");
         assert_eq!((medium.density(), medium.sound_speed()), (1000.0, 1500.0));
     }
 }
