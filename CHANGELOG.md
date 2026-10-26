@@ -1,5 +1,16 @@
 # Changelog
 
+## [0.28.0] - Unreleased
+
+### Fixed
+
+- [minor] Type the FDTD grid and medium constructors with aequitas
+  quantities: `Fdtd3dParams::new` takes `Length` spacings and a `Time`
+  timestep, `FdtdMedium::new` takes `MassDensity` and `Velocity`, each
+  reduced once to SI base `f32` at the boundary. Plain-`f32` `Pod`
+  storage is unchanged for parameter-block upload, and CFL analysis
+  stays caller-side.
+
 ## [0.27.0] - Unreleased
 
 ### Added
