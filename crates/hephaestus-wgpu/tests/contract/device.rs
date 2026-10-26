@@ -33,11 +33,27 @@ pub(crate) fn fdtd_3d_provider_matches_sequential_cpu_reference() {
     let Some(device) = device_or_skip() else {
         return;
     };
-    let params = Fdtd3dParams::new(5, 5, 5, 1.0, 1.0, 1.0, 0.01).expect("valid FDTD grid");
+    let params = Fdtd3dParams::new(
+        5,
+        5,
+        5,
+        Length::from_unit::<Meter>(1.0),
+        Length::from_unit::<Meter>(1.0),
+        Length::from_unit::<Meter>(1.0),
+        Time::from_unit::<Second>(0.01),
+    )
+    .expect("valid FDTD grid");
     let len = params.storage_len().expect("valid FDTD storage");
     let mut pressure = vec![0.0_f32; len];
     let velocity = vec![FdtdVelocity::zeroed(); len];
-    let medium = vec![FdtdMedium::new(2.0, 3.0).expect("valid medium"); len];
+    let medium = vec![
+        FdtdMedium::new(
+            MassDensity::from_unit::<KilogramPerCubicMeter>(2.0),
+            Velocity::from_unit::<MeterPerSecond>(3.0),
+        )
+        .expect("valid medium");
+        len
+    ];
     for z in 0..5 {
         for y in 0..5 {
             for x in 0..5 {
