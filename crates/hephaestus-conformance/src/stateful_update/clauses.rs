@@ -1,291 +1,21 @@
-//! Contract clauses for provider-owned stateful parameter updates.
+//! The stateful-update clauses: the rank-boundary layout sweep, the
+//! rejection-atomicity clause, and the aggregate entry point.
 
-use eunomia::{FloatElement, Pod, RealField};
 use hephaestus_core::{
     AdaGrad, AdaGradParameters, Adam, AdamParameters, AdamW, AdamWParameters, ComputeDevice,
     HephaestusError, RmsProp, RmsPropParameters, Sgd, SgdParameters, StatefulUpdateOperands,
-    StatefulUpdateOps, StatefulUpdateRule, StridedView, UpdateWidth,
+    StatefulUpdateOps, StatefulUpdateRule, StridedView,
 };
 use leto::{ArrayView, ArrayViewMut, Layout};
 use leto_ops::{
     AdaGrad as CpuAdaGrad, AdaGradParameters as CpuAdaGradParameters, Adam as CpuAdam,
     AdamParameters as CpuAdamParameters, AdamW as CpuAdamW, AdamWParameters as CpuAdamWParameters,
-    RealScalar, RmsProp as CpuRmsProp, RmsPropParameters as CpuRmsPropParameters, Sgd as CpuSgd,
+    RmsProp as CpuRmsProp, RmsPropParameters as CpuRmsPropParameters, Sgd as CpuSgd,
     SgdParameters as CpuSgdParameters, stateful_update as cpu_update,
 };
 
-const REPEATED_STEPS: usize = 2;
-
-/// Width-indexed stateful-update clause seam.
-///
-/// Extends the core [`UpdateWidth`] seam with the oracle bounds the clauses
-/// need, so every clause below runs for both widths from one body instead of
-/// a duplicated f64 entry.
-pub trait StatefulUpdateWidth:
-    UpdateWidth + RealField + RealScalar + Pod + PartialEq + core::fmt::Debug
-{
-    /// Dispatch one update at this width.
-    fn dispatch<D, O, Rule, const N: usize>(
-        device: &D,
-        operations: &O,
-        operands: StatefulUpdateOperands<'_, D::Buffer<Self>, N>,
-        parameters: <Rule as StatefulUpdateRule<O::Dialect>>::Parameters<Self>,
-    ) -> Result<(), HephaestusError>
-    where
-        D: ComputeDevice,
-        O: StatefulUpdateOps<D>,
-        Rule: StatefulUpdateRule<O::Dialect>,
-    {
-        operations.stateful_update::<Rule, Self, N>(device, operands, parameters)
-    }
-}
-
-impl StatefulUpdateWidth for f32 {}
-
-impl StatefulUpdateWidth for f64 {}
-
-#[derive(Clone)]
-struct HostOperands<T> {
-    parameter: [T; 6],
-    gradient: [T; 6],
-    state_zero: [T; 6],
-    state_one: [T; 6],
-}
-
-impl<T: FloatElement> HostOperands<T> {
-    fn seeded() -> Self {
-        Self {
-            parameter: [91.0, 1.0, 2.0, 92.0, 3.0, 4.0].map(T::from_f32),
-            gradient: [81.0, 0.1, 0.2, 82.0, 0.3, 0.4].map(T::from_f32),
-            state_zero: [71.0, 0.5, 0.6, 72.0, 0.7, 0.8].map(T::from_f32),
-            state_one: [61.0, 0.25, 0.36, 62.0, 0.49, 0.64].map(T::from_f32),
-        }
-    }
-}
-
-trait CpuRule<T> {
-    type Parameters: Copy;
-    const STATE_COUNT: usize;
-
-    fn step(operands: &mut HostOperands<T>, parameters: Self::Parameters);
-}
-
-impl<T: RealScalar> CpuRule<T> for CpuSgd {
-    type Parameters = CpuSgdParameters<T>;
-    const STATE_COUNT: usize = 1;
-
-    fn step(operands: &mut HostOperands<T>, parameters: Self::Parameters) {
-        let layout = Layout::try_new([2, 2], [3, 1], 1).expect("valid conformance fixture layout");
-        cpu_update::<T, Self, 2>(
-            ArrayViewMut::new(layout, &mut operands.parameter),
-            ArrayView::new(layout, &operands.gradient),
-            ArrayViewMut::new(layout, &mut operands.state_zero),
-            parameters,
-        )
-        .expect("Leto SGD oracle");
-    }
-}
-
-impl<T: RealScalar> CpuRule<T> for CpuAdam {
-    type Parameters = CpuAdamParameters<T>;
-    const STATE_COUNT: usize = 2;
-
-    fn step(operands: &mut HostOperands<T>, parameters: Self::Parameters) {
-        let layout = Layout::try_new([2, 2], [3, 1], 1).expect("valid conformance fixture layout");
-        cpu_update::<T, Self, 2>(
-            ArrayViewMut::new(layout, &mut operands.parameter),
-            ArrayView::new(layout, &operands.gradient),
-            (
-                ArrayViewMut::new(layout, &mut operands.state_zero),
-                ArrayViewMut::new(layout, &mut operands.state_one),
-            ),
-            parameters,
-        )
-        .expect("Leto Adam oracle");
-    }
-}
-
-impl<T: RealScalar> CpuRule<T> for CpuAdamW {
-    type Parameters = CpuAdamWParameters<T>;
-    const STATE_COUNT: usize = 2;
-
-    fn step(operands: &mut HostOperands<T>, parameters: Self::Parameters) {
-        let layout = Layout::try_new([2, 2], [3, 1], 1).expect("valid conformance fixture layout");
-        cpu_update::<T, Self, 2>(
-            ArrayViewMut::new(layout, &mut operands.parameter),
-            ArrayView::new(layout, &operands.gradient),
-            (
-                ArrayViewMut::new(layout, &mut operands.state_zero),
-                ArrayViewMut::new(layout, &mut operands.state_one),
-            ),
-            parameters,
-        )
-        .expect("Leto AdamW oracle");
-    }
-}
-
-impl<T: RealScalar> CpuRule<T> for CpuRmsProp {
-    type Parameters = CpuRmsPropParameters<T>;
-    const STATE_COUNT: usize = 1;
-
-    fn step(operands: &mut HostOperands<T>, parameters: Self::Parameters) {
-        let layout = Layout::try_new([2, 2], [3, 1], 1).expect("valid conformance fixture layout");
-        cpu_update::<T, Self, 2>(
-            ArrayViewMut::new(layout, &mut operands.parameter),
-            ArrayView::new(layout, &operands.gradient),
-            ArrayViewMut::new(layout, &mut operands.state_zero),
-            parameters,
-        )
-        .expect("Leto RMSProp oracle");
-    }
-}
-
-impl<T: RealScalar> CpuRule<T> for CpuAdaGrad {
-    type Parameters = CpuAdaGradParameters<T>;
-    const STATE_COUNT: usize = 1;
-
-    fn step(operands: &mut HostOperands<T>, parameters: Self::Parameters) {
-        let layout = Layout::try_new([2, 2], [3, 1], 1).expect("valid conformance fixture layout");
-        cpu_update::<T, Self, 2>(
-            ArrayViewMut::new(layout, &mut operands.parameter),
-            ArrayView::new(layout, &operands.gradient),
-            ArrayViewMut::new(layout, &mut operands.state_zero),
-            parameters,
-        )
-        .expect("Leto AdaGrad oracle");
-    }
-}
-
-fn run_cpu<Rule: CpuRule<T>, T: FloatElement>(parameters: Rule::Parameters) -> HostOperands<T> {
-    let mut operands = HostOperands::seeded();
-    for _ in 0..REPEATED_STEPS {
-        Rule::step(&mut operands, parameters);
-    }
-    operands
-}
-
-fn run_backend<D, O, Rule, T>(
-    device: &D,
-    operations: &O,
-    parameters: <Rule as StatefulUpdateRule<O::Dialect>>::Parameters<T>,
-    state_count: usize,
-) -> HostOperands<T>
-where
-    D: ComputeDevice,
-    O: StatefulUpdateOps<D>,
-    Rule: StatefulUpdateRule<O::Dialect>,
-    T: StatefulUpdateWidth,
-{
-    let layout = Layout::try_new([2, 2], [3, 1], 1).expect("valid conformance fixture layout");
-    let seeded = HostOperands::seeded();
-    let parameter = device.upload(&seeded.parameter).expect("parameter upload");
-    let gradient = device.upload(&seeded.gradient).expect("gradient upload");
-    let state_zero = device
-        .upload(&seeded.state_zero)
-        .expect("state-zero upload");
-    let state_one = device.upload(&seeded.state_one).expect("state-one upload");
-    let one_state = [StridedView::new(&state_zero, &layout)];
-    let two_states = [
-        StridedView::new(&state_zero, &layout),
-        StridedView::new(&state_one, &layout),
-    ];
-    let states = if state_count == 1 {
-        &one_state[..]
-    } else {
-        &two_states[..]
-    };
-    for _ in 0..REPEATED_STEPS {
-        T::dispatch::<D, O, Rule, 2>(
-            device,
-            operations,
-            StatefulUpdateOperands {
-                parameter: StridedView::new(&parameter, &layout),
-                gradient: StridedView::new(&gradient, &layout),
-                states,
-            },
-            parameters,
-        )
-        .expect("stateful update dispatch");
-    }
-    let mut actual = seeded;
-    device
-        .download(&parameter, &mut actual.parameter)
-        .expect("parameter download");
-    device
-        .download(&gradient, &mut actual.gradient)
-        .expect("gradient download");
-    device
-        .download(&state_zero, &mut actual.state_zero)
-        .expect("state-zero download");
-    device
-        .download(&state_one, &mut actual.state_one)
-        .expect("state-one download");
-    actual
-}
-
-fn assert_close<T: RealField>(name: &str, actual: &[T], expected: &[T]) {
-    assert_eq!(actual.len(), expected.len(), "{name}: length mismatch");
-    for (index, (&actual, &expected)) in actual.iter().zip(expected).enumerate() {
-        // Each provider rule has at most 24 rounded operations per step per
-        // width. Two repeated steps give a forward bound of 48 epsilon; 64
-        // epsilon includes final comparison rounding without masking formula
-        // defects. The bound scales with the width's own epsilon.
-        let magnitude = expected.abs();
-        let scale = if magnitude > T::ONE {
-            magnitude
-        } else {
-            T::ONE
-        };
-        let tolerance = T::from_f32(64.0) * T::EPSILON * scale;
-        assert!(
-            (actual - expected).abs() <= tolerance,
-            "{name}[{index}]: got {actual:?}, expected {expected:?}, tolerance {tolerance:?}"
-        );
-    }
-}
-
-fn assert_rule<D, O, BackendRule, HostRule, T>(
-    device: &D,
-    operations: &O,
-    backend_parameters: <BackendRule as StatefulUpdateRule<O::Dialect>>::Parameters<T>,
-    host_parameters: HostRule::Parameters,
-) where
-    D: ComputeDevice,
-    O: StatefulUpdateOps<D>,
-    BackendRule: StatefulUpdateRule<O::Dialect>,
-    HostRule: CpuRule<T>,
-    T: StatefulUpdateWidth,
-{
-    let name = device.backend_name();
-    let actual = run_backend::<D, O, BackendRule, T>(
-        device,
-        operations,
-        backend_parameters,
-        HostRule::STATE_COUNT,
-    );
-    let expected = run_cpu::<HostRule, T>(host_parameters);
-    assert_close(
-        &format!("{name} parameter"),
-        &actual.parameter,
-        &expected.parameter,
-    );
-    assert_eq!(
-        actual.gradient, expected.gradient,
-        "{name} gradient changed"
-    );
-    assert_close(
-        &format!("{name} state zero"),
-        &actual.state_zero,
-        &expected.state_zero,
-    );
-    if HostRule::STATE_COUNT == 2 {
-        assert_close(
-            &format!("{name} state one"),
-            &actual.state_one,
-            &expected.state_one,
-        );
-    }
-}
+use super::harness::{assert_close, assert_rule};
+use super::width::StatefulUpdateWidth;
 
 /// Width-matched SGD parameters for the boundary clause: the backend twin
 /// plus the Leto oracle parameters. One argument instead of two so the
@@ -302,6 +32,11 @@ impl<T, P> SgdParameterPair<T, P> {
     }
 }
 
+/// Assert one SGD step over an arbitrary layout agrees with the oracle.
+///
+/// The clause takes the layout as a parameter so the rank boundary
+/// sweep can run it at rank zero and at rank eight — the widest rank
+/// the seam admits — without duplicating the body.
 fn assert_sgd_layout<D, O, T, const N: usize>(
     device: &D,
     operations: &O,
@@ -366,6 +101,12 @@ fn assert_sgd_layout<D, O, T, const N: usize>(
     );
 }
 
+/// A rejected dispatch must leave every operand untouched.
+///
+/// Two rejections are exercised: a state whose shape disagrees with the
+/// parameter, and a state that aliases the parameter's storage. Both
+/// must fail typed, and neither may have mutated the parameter or the
+/// state before failing.
 fn assert_rejections_are_atomic<D, O, T>(
     device: &D,
     operations: &O,
@@ -434,9 +175,10 @@ fn assert_rejections_are_atomic<D, O, T>(
 
 /// Run all stateful-update value and rejection clauses against one backend.
 ///
-/// Fixture scalars lift through [`FloatElement::from_f32`], so f32 clauses
-/// run bit-identical values while f64 clauses widen the same f32-rounded
-/// fixtures; backend and Leto oracle always share one parameter value.
+/// Fixture scalars lift through [`FloatElement::from_f32`](eunomia::FloatElement::from_f32),
+/// so f32 clauses run bit-identical values while f64 clauses widen the same
+/// f32-rounded fixtures; backend and Leto oracle always share one parameter
+/// value.
 ///
 /// # Panics
 ///

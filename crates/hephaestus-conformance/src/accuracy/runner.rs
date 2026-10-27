@@ -7,12 +7,9 @@ use hephaestus_core::{
 };
 use leto::Layout;
 
+// ──SweepDialect & input filters ───────────────────────────────────────────────
+
 /// Which published bound family a sweep asserts.
-///
-/// The backend test passes the variant matching the dialect its seam authors:
-/// CUDA tests pass [`SweepDialect::CudaC`], ROCm tests [`SweepDialect::HipC`],
-/// and WGSL-authoring backends (WGPU, Metal) [`SweepDialect::Wgsl`]. The
-/// runners check the choice against the seam's dialect in debug builds.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum SweepDialect {
     /// CUDA C library bounds (CUDA Programming Guide Table 17).
@@ -39,13 +36,7 @@ impl SweepDialect {
     }
 }
 
-/// Drop subnormal inputs, keeping `±0`, normals, infinities, and NaN.
-///
-/// WGSL permits flushing subnormals to zero, and the measured Vulkan driver
-/// does (a `1e-40` input reaches the lane as zero, and a subnormal kink
-/// comparison flips to the pass-through arm): subnormal inputs are out of
-/// contract on WGSL, so the WGSL entries sweep without them. CUDA and HIP
-/// behave as IEEE here and keep them.
+/// Drop subnormal inputs, keeping `±0`, normals, infinities, and NaN (for WGSL).
 #[must_use]
 pub fn without_subnormals(inputs: &[f32]) -> Vec<f32> {
     inputs
@@ -55,19 +46,9 @@ pub fn without_subnormals(inputs: &[f32]) -> Vec<f32> {
         .collect()
 }
 
-/// Drop inputs below `floor`, keeping everything at or above it.
-///
-/// WGSL permits flushing subnormal results to zero: ops whose true results
-/// go subnormal on the negative tail (softplus and the sigmoid below
-/// `x = -87`, where the result crosses `f32::MIN_POSITIVE`) sweep WGSL
-/// without that tail, since a flushed zero scores tens of thousands of
-/// subnormal ULP against a subnormal reference through no fault of the
-/// form. CUDA and HIP behave as IEEE here and keep the tail.
+/// Drop inputs below `floor`, keeping everything at or above it (or non-finite).
 #[must_use]
 pub fn above_flush_floor(inputs: &[f32], floor: f32) -> Vec<f32> {
-    // Non-finite inputs always pass through: the `±inf`/`NaN` specials
-    // verify the guards, and the floor only concerns finite inputs whose
-    // results would flush.
     inputs
         .iter()
         .copied()
@@ -75,18 +56,9 @@ pub fn above_flush_floor(inputs: &[f32], floor: f32) -> Vec<f32> {
         .collect()
 }
 
-/// Drop inputs above `cap`, keeping everything at or below it.
-///
-/// WGSL permits flushing subnormal results to zero: ops whose true results
-/// go subnormal on the positive tail (erfc past `x = 8.9`) sweep WGSL
-/// without that tail, since a flushed zero scores thousands of subnormal
-/// ULP against a subnormal reference through no fault of the form. CUDA
-/// and HIP behave as IEEE here and keep the tail.
+/// Drop inputs above `cap`, keeping everything at or below it (or non-finite).
 #[must_use]
 pub fn below_cap(inputs: &[f32], cap: f32) -> Vec<f32> {
-    // Non-finite inputs always pass through: the `±inf`/`NaN` specials
-    // verify the guards, and the cap only concerns finite inputs whose
-    // results would flush.
     inputs
         .iter()
         .copied()
@@ -95,20 +67,9 @@ pub fn below_cap(inputs: &[f32], cap: f32) -> Vec<f32> {
 }
 
 /// Distance of a device `f32` result from its `f64` value-function reference,
-/// in ULP of `f32` at the reference's magnitude. Never NaN: a NaN `got`
-/// against a finite reference scores infinity.
-///
-/// - NaN reference: `0` when `got` is NaN, infinity otherwise.
-/// - Infinite reference: `0` when `got` equals it, infinity otherwise.
-/// - Infinite `got` against a finite reference: `0` for a correct overflow
-///   to infinity, infinity otherwise.
-/// - Zero reference: absolute error in units of the subnormal ULP `2^-149`,
-///   so a form returning `±0` scores `0` and anything else scores enormously.
-/// - Otherwise: `|got − ref| / ulp32(ref)`, with `|ref|` below normal clamped
-///   to the `2^-149` floor (the sweeps pin tails whose references are normal
-///   floats, where the scale is exact).
+/// in ULP of `f32` at the reference's magnitude. Never NaN.
 #[must_use]
-pub fn ulps_from_f64(got: f32, reference: f64) -> f64 {
+pub fn ulps_from_reference(got: f32, reference: f64) -> f64 {
     if reference.is_nan() {
         return if got.is_nan() { 0.0 } else { f64::INFINITY };
     }
@@ -199,7 +160,7 @@ pub fn assert_unary_sweep_within<D, E, Op>(
     let mut worst_input = 0.0f32;
     let mut over = 0usize;
     for (&x, &y) in inputs.iter().zip(&got) {
-        let error = ulps_from_f64(y, Op::apply(f64::from(x)));
+        let error = ulps_from_reference(y, Op::apply(f64::from(x)));
         if error > worst {
             worst = error;
             worst_input = x;
@@ -226,7 +187,7 @@ pub fn assert_unary_sweep_within<D, E, Op>(
 /// floor derives from the form's absolute rounding analysis like any
 /// bound. Non-finite results against a finite reference fail loudly;
 /// NaN-in/NaN-out and exact infinities score zero as in
-/// [`ulps_from_f64`].
+/// [`ulps_from_reference`].
 pub fn assert_unary_sweep_abs_within<D, E, Op>(
     device: &D,
     ops: &E,
@@ -325,7 +286,7 @@ pub fn assert_parameterized_sweep_within<D, P, Op>(
     let mut worst_input = 0.0f32;
     let mut over = 0usize;
     for (&x, &y) in inputs.iter().zip(&got) {
-        let error = ulps_from_f64(y, Op::apply(f64::from(x), first, second));
+        let error = ulps_from_reference(y, Op::apply(f64::from(x), first, second));
         if error > worst {
             worst = error;
             worst_input = x;

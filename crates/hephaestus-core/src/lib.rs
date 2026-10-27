@@ -135,7 +135,8 @@ pub use domain::pooling::{
 pub use domain::random::RandomInitOps;
 pub use domain::reduction::{
     AxisReductionDispatch, AxisReductionMeta, AxisReductionOps, FullReductionOps,
-    StridedComputeBackend, plan_axis_reduction, reduction_pass_count, validate_reduction_width,
+    StridedComputeBackend, checked_shared_bytes, plan_axis_reduction, reduction_pass_count,
+    validate_reduction_width,
 };
 pub use domain::roll::{RollOps, validate_roll_shape};
 pub use domain::scan::{AxisScanDispatch, AxisScanMeta, ScanDirection, ScanOps, plan_axis_scan};
@@ -155,8 +156,7 @@ pub use domain::stateful_update::{
     StatefulUpdateOperands, StatefulUpdateOps, StatefulUpdatePlan, StatefulUpdateRule,
     StatefulUpdateStep, UpdateWidth, plan_stateful_update,
 };
-pub use domain::stencil::StencilOps;
-pub use domain::stencil::{BoundaryCondition, Laplacian2DParams, LaplacianPolarity};
+pub use domain::stencil::{BoundaryCondition, Laplacian2DParams, LaplacianPolarity, StencilOps};
 pub use domain::stream::{
     Binding, CommandStream, GroupedBinding, GroupedCommandStream, GroupedKernelDevice,
     GroupedKernelSequence, KernelDevice, validate_bindings, validate_grouped_bindings,

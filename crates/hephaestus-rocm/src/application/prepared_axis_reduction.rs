@@ -9,11 +9,11 @@ use hephaestus_core::{
 };
 
 use crate::RocmDevice;
-use crate::application::axis_reduction::{
-    axis_len, axis_reduction_shader_source, launch_with_meta, mean_axis_shader_source,
-    plan_dispatch, reject_empty_axis,
-};
 use crate::application::pipeline::{PipelineKey, RocmKernel, cached_kernel};
+use crate::application::reduction::{
+    axis_len, axis_reduction_shader_source, launch_axis_dispatch, mean_axis_shader_source,
+    plan_axis_reduction_dispatch, reject_empty_axis,
+};
 use crate::application::strided::StridedOperand;
 
 /// A reusable ROCm rank-2 axis reduction over fixed input and output views.
@@ -35,12 +35,12 @@ impl<T> PreparedAxisReduction<'_, T> {
         let (Some(dispatch), Some(kernel)) = (self.dispatch, self.kernel.as_ref()) else {
             return Ok(());
         };
-        launch_with_meta(
+        launch_axis_dispatch(
             device,
             kernel,
             dispatch,
-            self.input.buffer.raw(),
-            self.output.buffer.raw(),
+            &self.input,
+            &self.output,
             self.width,
         )
     }
@@ -109,7 +109,7 @@ where
     Op: CombineExpr<HipC>,
     T: DialectScalar<HipC> + Pod + OpIdentity<Op> + IdentityToken<Op, HipC>,
 {
-    let Some(dispatch) = plan_dispatch(input, axis, output, width)? else {
+    let Some(dispatch) = plan_axis_reduction_dispatch(input, axis, output, width)? else {
         return Ok(empty_prepared_axis_reduction(input, output, width));
     };
     let kernel = cached_kernel(
@@ -203,7 +203,7 @@ where
     T: DialectScalar<HipC> + Pod + OpIdentity<SumOp> + IdentityToken<SumOp, HipC>,
 {
     reject_empty_axis(axis_len(input, axis)?, "mean_axis", axis)?;
-    let Some(dispatch) = plan_dispatch(input, axis, output, width)? else {
+    let Some(dispatch) = plan_axis_reduction_dispatch(input, axis, output, width)? else {
         return Ok(empty_prepared_axis_reduction(input, output, width));
     };
     let kernel = cached_kernel(

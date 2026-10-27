@@ -1,171 +1,24 @@
-//! Vector/matrix reductions on the CUDA device: dot product, trace, and norms.
-//!
-//! Each operation uses one fused strided map-reduction kernel for its first
-//! reduction pass. Only the workgroup partials remain as a temporary, so the
-//! operation does not materialize an elementwise result of the logical input
-//! size before reducing it. Prepared plans use the same first-pass object and
-//! retain its partials across dispatches.
+//! Prepared and retained map-reduction plans on CUDA.
 
 use std::marker::PhantomData;
 use std::sync::Arc;
 
-use eunomia::{Pod, Zeroable};
+use eunomia::Pod;
 use hephaestus_core::{
-    BlockWidth, CombineExpr, ComputeDevice, CudaC, DeviceBuffer, DialectScalar, HephaestusError,
-    IdentityToken, MaxOp, OpIdentity, Result, SumOp,
+    BlockWidth, ComputeDevice, CudaC, DeviceBuffer, DialectScalar, HephaestusError, IdentityToken,
+    OpIdentity, Result, checked_shared_bytes,
 };
 use leto::Layout;
 
-use super::map_layout_err;
+use super::super::map_layout_err;
+use super::shader::{MapReductionMeta, MapReductionOp, shader_source};
 use crate::CudaDevice;
-use crate::application::elementwise::{SqrtOp, unary_elementwise_into};
 use crate::application::pipeline::{
     LaunchConfig, PipelineKey, SafeCachedKernel, cached_kernel, grid_size, launch_kernel,
 };
 use crate::application::prepared_reduction::PreparedReductionPlan;
 use crate::application::strided::{MAX_STRIDED_RANK, StridedOperand, pad_shape, pad_strides};
 use crate::infrastructure::buffer::CudaBuffer;
-
-#[repr(C)]
-#[derive(Clone, Copy, Pod, Zeroable)]
-pub(crate) struct MapReductionMeta {
-    shape: [u32; 8],
-    a_strides: [i32; 8],
-    b_strides: [i32; 8],
-    offsets: [u32; 4],
-}
-
-const _: () = assert!(core::mem::size_of::<MapReductionMeta>() == 112);
-
-pub(crate) trait MapReductionOp: Copy + Send + Sync + 'static {
-    type ReduceOp: CombineExpr<CudaC>;
-
-    const EXPR: &'static str;
-}
-
-#[derive(Clone, Copy, Debug, Default)]
-pub(crate) struct IdentityMap;
-
-#[derive(Clone, Copy, Debug, Default)]
-pub(crate) struct DotMap;
-
-#[derive(Clone, Copy, Debug, Default)]
-struct AbsMap;
-
-#[derive(Clone, Copy, Debug, Default)]
-pub(crate) struct SquareMap;
-
-#[derive(Clone, Copy, Debug, Default)]
-struct MaxAbsMap;
-
-impl MapReductionOp for IdentityMap {
-    type ReduceOp = SumOp;
-
-    const EXPR: &'static str = "lhs";
-}
-
-impl MapReductionOp for DotMap {
-    type ReduceOp = SumOp;
-
-    const EXPR: &'static str = "lhs * rhs";
-}
-
-impl MapReductionOp for AbsMap {
-    type ReduceOp = SumOp;
-
-    const EXPR: &'static str = "abs(lhs)";
-}
-
-impl MapReductionOp for SquareMap {
-    type ReduceOp = SumOp;
-
-    const EXPR: &'static str = "lhs * rhs";
-}
-
-impl MapReductionOp for MaxAbsMap {
-    type ReduceOp = MaxOp;
-
-    const EXPR: &'static str = "abs(lhs)";
-}
-
-pub(crate) fn shader_source<Op, T>(width: BlockWidth) -> String
-where
-    Op: MapReductionOp,
-    T: DialectScalar<CudaC> + IdentityToken<Op::ReduceOp, CudaC>,
-{
-    format!(
-        r#"
-struct MapReductionMeta {{
-    unsigned int shape[8];
-    int a_strides[8];
-    int b_strides[8];
-    unsigned int offsets[4];
-}};
-
-extern "C" __global__ void map_reduction_kernel(
-    MapReductionMeta meta,
-    const {ty}* a,
-    const {ty}* b,
-    {ty}* output
-) {{
-    extern __shared__ {ty} shared_data[];
-
-    unsigned int tid = threadIdx.x;
-    unsigned int i = blockIdx.x * blockDim.x + tid;
-    {ty} value = {identity};
-    if (i < meta.offsets[3]) {{
-        unsigned int rem = i;
-        int a_off = (int)meta.offsets[0];
-        int b_off = (int)meta.offsets[1];
-        for (int dimension = 7; dimension >= 0; --dimension) {{
-            unsigned int dim = meta.shape[dimension];
-            unsigned int index = rem % dim;
-            rem /= dim;
-            a_off += (int)index * meta.a_strides[dimension];
-            b_off += (int)index * meta.b_strides[dimension];
-        }}
-        {ty} lhs = a[a_off];
-        {ty} rhs = b[b_off];
-        value = {expr};
-    }}
-    shared_data[tid] = value;
-    __syncthreads();
-
-    for (unsigned int stride = {width}u / 2u; stride > 0u; stride /= 2u) {{
-        if (tid < stride) {{
-            {ty} lhs = shared_data[tid];
-            {ty} rhs = shared_data[tid + stride];
-            shared_data[tid] = {reduce};
-        }}
-        __syncthreads();
-    }}
-
-    if (tid == 0u) {{
-        output[blockIdx.x] = shared_data[0];
-    }}
-}}
-"#,
-        ty = T::TYPE_TOKEN,
-        identity = <T as IdentityToken<Op::ReduceOp, CudaC>>::TOKEN,
-        expr = Op::EXPR,
-        width = width.get(),
-        reduce = <Op::ReduceOp as CombineExpr<CudaC>>::EXPR,
-    )
-}
-
-pub(crate) fn checked_shared_bytes<T>(width: BlockWidth) -> Result<u32> {
-    usize::try_from(width.get())
-        .ok()
-        .and_then(|width| width.checked_mul(core::mem::size_of::<T>()))
-        .and_then(|bytes| u32::try_from(bytes).ok())
-        .ok_or_else(|| HephaestusError::DispatchFailed {
-            message: format!(
-                "CUDA map-reduction shared-memory size overflows for width {} and element size {}",
-                width.get(),
-                core::mem::size_of::<T>()
-            ),
-        })
-}
 
 pub(crate) struct PreparedMapReduction<'a, Op, T, const N: usize> {
     resources: MapReductionResources<T>,
@@ -441,7 +294,7 @@ where
     })
 }
 
-fn map_reduction<Op, T, const N: usize>(
+pub(super) fn map_reduction<Op, T, const N: usize>(
     device: &CudaDevice,
     a: StridedOperand<'_, T, N>,
     b: StridedOperand<'_, T, N>,
@@ -453,113 +306,4 @@ where
     let prepared = prepare_map_reduction::<Op, T, N>(device, a, b)?;
     prepared.dispatch()?;
     Ok(prepared.into_output())
-}
-
-/// Compute the vector dot product `Σᵢ a[i] * b[i]` on the CUDA device.
-pub fn dot<T>(
-    device: &CudaDevice,
-    a: StridedOperand<'_, T, 1>,
-    b: StridedOperand<'_, T, 1>,
-) -> Result<CudaBuffer<T>>
-where
-    T: DialectScalar<CudaC> + Pod + OpIdentity<SumOp> + IdentityToken<SumOp, CudaC>,
-{
-    if a.layout.shape() != b.layout.shape() {
-        return Err(HephaestusError::DispatchFailed {
-            message: format!(
-                "dot product shape mismatch: lhs {:?}, rhs {:?}",
-                a.layout.shape(),
-                b.layout.shape()
-            ),
-        });
-    }
-
-    map_reduction::<DotMap, T, 1>(device, a, b)
-}
-
-/// Compute the trace `tr(A) = Σᵢ aᵢᵢ` of a square matrix on the CUDA device.
-pub fn trace<T>(device: &CudaDevice, matrix: StridedOperand<'_, T, 2>) -> Result<CudaBuffer<T>>
-where
-    T: DialectScalar<CudaC> + Pod + OpIdentity<SumOp> + IdentityToken<SumOp, CudaC>,
-{
-    let [rows, cols] = matrix.layout.shape();
-    if rows != cols {
-        return Err(HephaestusError::DispatchFailed {
-            message: format!(
-                "trace requires a square matrix, got shape {:?}",
-                matrix.layout.shape()
-            ),
-        });
-    }
-
-    if rows == 0 {
-        return device.upload(&[T::IDENTITY]);
-    }
-
-    let diagonal_stride = matrix.layout.strides()[0]
-        .checked_add(matrix.layout.strides()[1])
-        .ok_or_else(|| HephaestusError::DispatchFailed {
-            message: "trace diagonal stride overflows isize".to_string(),
-        })?;
-    let diag_layout = Layout::try_new([rows], [diagonal_stride], matrix.layout.offset())
-        .expect("invariant: submatrix layout derives from a validated parent");
-    let diag_operand = StridedOperand {
-        buffer: matrix.buffer,
-        layout: &diag_layout,
-    };
-
-    map_reduction::<IdentityMap, T, 1>(device, diag_operand, diag_operand)
-}
-
-/// Compute the L1 norm `Σ |x|` on the CUDA device.
-pub fn norm_l1<T, const N: usize>(
-    device: &CudaDevice,
-    view: StridedOperand<'_, T, N>,
-) -> Result<CudaBuffer<T>>
-where
-    T: DialectScalar<CudaC> + Pod + OpIdentity<SumOp> + IdentityToken<SumOp, CudaC>,
-{
-    map_reduction::<AbsMap, T, N>(device, view, view)
-}
-
-/// Compute the L2 / Frobenius norm `sqrt(Σ x²)` on the CUDA device.
-pub fn norm_l2<T, const N: usize>(
-    device: &CudaDevice,
-    view: StridedOperand<'_, T, N>,
-) -> Result<CudaBuffer<T>>
-where
-    T: DialectScalar<CudaC> + Pod + OpIdentity<SumOp> + IdentityToken<SumOp, CudaC>,
-{
-    let squared_sum = map_reduction::<SquareMap, T, N>(device, view, view)?;
-    let out = device.alloc_uninitialized::<T>(1)?;
-    unary_elementwise_into::<SqrtOp, T>(device, &squared_sum, &out, BlockWidth::DEFAULT)?;
-    Ok(out)
-}
-
-/// Compute the Max norm `max |x|` on the CUDA device.
-pub fn norm_max<T, const N: usize>(
-    device: &CudaDevice,
-    view: StridedOperand<'_, T, N>,
-) -> Result<CudaBuffer<T>>
-where
-    T: DialectScalar<CudaC> + Pod + OpIdentity<MaxOp> + IdentityToken<MaxOp, CudaC>,
-{
-    map_reduction::<MaxAbsMap, T, N>(device, view, view)
-}
-
-#[cfg(test)]
-mod tests {
-    use super::{DotMap, shader_source};
-    use hephaestus_core::BlockWidth;
-
-    #[test]
-    fn source_declares_strided_map_reduction_contract() {
-        let source = shader_source::<DotMap, f32>(BlockWidth::DEFAULT);
-        assert!(source.contains("shape[8]"));
-        assert!(source.contains("a_strides[8]"));
-        assert!(source.contains("b_strides[8]"));
-        assert!(source.contains("shared_data"));
-        assert!(source.contains("lhs * rhs"));
-        assert!(source.contains("__syncthreads();"));
-    }
 }

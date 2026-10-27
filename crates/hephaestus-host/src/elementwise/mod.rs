@@ -13,7 +13,8 @@
 //! `u32`/`i32`/`F16`/`Bf16` through the `NumericElement` methods, and a
 //! real-only unary operator on a non-real scalar reports no application at
 //! all — the seam turns that into the typed
-//! [`HephaestusError::DispatchFailed`] naming the operator, identically to an
+//! [`hephaestus_core::HephaestusError::DispatchFailed`] naming the operator,
+//! identically to an
 //! operator with no host value function whatsoever.
 //!
 //! # Broadcasting, aliasing, and output semantics

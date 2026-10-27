@@ -9,12 +9,9 @@
 //! Kronecker products use the same strided rank-2 metadata and one output
 //! thread per logical element.
 
-use eunomia::{Pod, Zeroable};
-use hephaestus_core::{HephaestusError, Result};
-use leto::Layout;
-
 mod batched_matmul;
 mod kron;
+mod layout;
 mod matmul;
 mod matpow;
 mod matrix;
@@ -39,56 +36,6 @@ pub(crate) use norms::{
 pub use norms::{L2NormScalar, dot, norm_l1, norm_l2, norm_max, trace};
 pub use pinv_matexp::{matexp, pinv};
 
-#[repr(C)]
-#[derive(Clone, Copy, Pod, Zeroable)]
-pub(super) struct GpuMatrixLayout {
-    pub(super) shape: [u32; 2],
-    pub(super) strides: [i32; 2],
-    pub(super) offset: u32,
-    pub(super) _pad: [u32; 3],
-}
-
-const _: () = assert!(core::mem::size_of::<GpuMatrixLayout>() == 32);
-
-#[inline]
-pub(super) fn map_layout(layout: &Layout<2>) -> Result<GpuMatrixLayout> {
-    Ok(GpuMatrixLayout {
-        shape: [
-            to_u32(layout.shape()[0], "dimension")?,
-            to_u32(layout.shape()[1], "dimension")?,
-        ],
-        strides: [
-            to_i32(layout.strides()[0], "stride")?,
-            to_i32(layout.strides()[1], "stride")?,
-        ],
-        offset: to_u32(layout.offset(), "offset")?,
-        _pad: [0; 3],
-    })
-}
-
-/// Map a leto layout-validation error into a dispatch failure.
-///
-/// Imported from [`hephaestus_core`] rather than re-declared so the diagnostic
-/// text has one home across the backends.
-pub(super) use hephaestus_core::map_layout_err;
-
-#[inline]
-pub(crate) fn to_u32(value: usize, what: &str) -> Result<u32> {
-    u32::try_from(value).map_err(|_| HephaestusError::DispatchFailed {
-        message: format!("{what} {value} exceeds u32 range"),
-    })
-}
-
-#[inline]
-pub(crate) fn to_i32(value: isize, what: &str) -> Result<i32> {
-    i32::try_from(value).map_err(|_| HephaestusError::DispatchFailed {
-        message: format!("{what} {value} exceeds i32 range"),
-    })
-}
-
-#[inline]
-pub(super) fn to_i64(value: isize, what: &str) -> Result<i64> {
-    i64::try_from(value).map_err(|_| HephaestusError::DispatchFailed {
-        message: format!("{what} {value} exceeds i64 range"),
-    })
-}
+use hephaestus_core::map_layout_err;
+use layout::{GpuMatrixLayout, map_layout, to_i64};
+pub(crate) use layout::{to_i32, to_u32};

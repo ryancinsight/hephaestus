@@ -1,80 +1,24 @@
-//! ROCm contiguous reductions over typed device buffers.
+//! Contiguous multi-pass tree reductions on ROCm.
 
-use crate::application::pipeline::{
-    LaunchConfig, PipelineKey, cached_kernel, grid_size, launch_kernel,
-};
-use crate::infrastructure::DevicePtr;
-use crate::{RocmBuffer, RocmDevice};
 use eunomia::Pod;
 use hephaestus_core::{
     BlockWidth, CombineExpr, ComputeDevice, DeviceBuffer, DialectScalar, HephaestusError, HipC,
-    IdentityToken, OpIdentity, Result, reduction_pass_count, validate_reduction_width,
+    IdentityToken, OpIdentity, Result, checked_shared_bytes, reduction_pass_count,
+    validate_reduction_width,
 };
 
-pub use hephaestus_core::{MaxOp, MinOp, SumOp};
+use crate::RocmDevice;
+use crate::application::pipeline::{
+    LaunchConfig, PipelineKey, cached_kernel, grid_size, launch_kernel,
+};
+use crate::infrastructure::{DevicePtr, RocmBuffer};
 
-pub(crate) fn shader_source<Op: CombineExpr<HipC>, T: IdentityToken<Op, HipC>>(
-    width: BlockWidth,
-) -> String {
-    format!(
-        r#"
-extern "C" __global__ void reduction_kernel(
-    const {ty}* input,
-    {ty}* output,
-    unsigned int n
-) {{
-    extern __shared__ {ty} shared_data[];
-
-    unsigned int tid = threadIdx.x;
-    unsigned int i = blockIdx.x * blockDim.x + tid;
-    shared_data[tid] = i < n ? input[i] : {identity};
-    __syncthreads();
-
-    for (unsigned int stride = {wg}u / 2u; stride > 0u; stride /= 2u) {{
-        if (tid < stride) {{
-            {ty} lhs = shared_data[tid];
-            {ty} rhs = shared_data[tid + stride];
-            shared_data[tid] = {expr};
-        }}
-        __syncthreads();
-    }}
-
-    if (tid == 0u) {{
-        output[blockIdx.x] = shared_data[0];
-    }}
-}}
-"#,
-        ty = T::TYPE_TOKEN,
-        wg = width.get(),
-        identity = T::TOKEN,
-        expr = Op::EXPR,
-    )
-}
+use super::shaders::shader_source;
 
 fn checked_work_items(len: usize) -> Result<u32> {
     u32::try_from(len).map_err(|_| HephaestusError::DispatchFailed {
         message: format!("ROCm reduction length {len} exceeds the HIP kernel argument range"),
     })
-}
-
-pub(crate) fn checked_shared_bytes<T>(width: BlockWidth) -> Result<u32> {
-    let width_elements =
-        usize::try_from(width.get()).map_err(|_| HephaestusError::DispatchFailed {
-            message: format!(
-                "ROCm reduction block width {} exceeds usize range",
-                width.get()
-            ),
-        })?;
-    width_elements
-        .checked_mul(core::mem::size_of::<T>())
-        .and_then(|bytes| u32::try_from(bytes).ok())
-        .ok_or_else(|| HephaestusError::DispatchFailed {
-            message: format!(
-                "ROCm reduction shared-memory size overflows for block width {} and element size {}",
-                width.get(),
-                core::mem::size_of::<T>()
-            ),
-        })
 }
 
 /// Run a contiguous reduction on the ROCm device.
@@ -122,13 +66,20 @@ where
         return device.upload(&[T::IDENTITY]);
     }
 
+    if input.len() == 1 {
+        // A one-element input reduces to itself, so the tree has nothing to
+        // fold: copy the element instead of launching a workgroup for it.
+        let output = device.alloc_uninitialized::<T>(1)?;
+        device.copy_buffer(input, &output)?;
+        return Ok(output);
+    }
+
     let mut current_len = input.len();
     let mut source_ptr = input.raw();
     let mut partials = Vec::with_capacity(reduction_pass_count(current_len, width));
     let shared_bytes = checked_shared_bytes::<T>(width)?;
-    let mut first_pass = true;
 
-    while first_pass || current_len > 1 {
+    while current_len > 1 {
         let n_val = checked_work_items(current_len)?;
         let groups = grid_size(current_len, width)?;
         let output_len = current_len.div_ceil(width.get() as usize);
@@ -160,7 +111,6 @@ where
         source_ptr = output.raw();
         current_len = output_len;
         partials.push(output);
-        first_pass = false;
     }
 
     let Some(result) = partials.pop() else {

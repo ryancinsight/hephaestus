@@ -7,7 +7,7 @@
 use eunomia::Pod;
 use hephaestus_core::{
     BlockWidth, ComputeDevice, CudaC, DeviceBuffer, DialectScalar, IdentityToken, OpIdentity,
-    Result, SumOp,
+    Result, SumOp, map_layout_err,
 };
 use leto::Layout;
 
@@ -89,10 +89,10 @@ where
     }
     lhs.layout
         .validate_storage_len(lhs.buffer.len())
-        .map_err(crate::application::linalg::map_layout_err)?;
+        .map_err(map_layout_err)?;
     rhs.layout
         .validate_storage_len(rhs.buffer.len())
-        .map_err(crate::application::linalg::map_layout_err)?;
+        .map_err(map_layout_err)?;
     let inner = prepare_map_reduction_with_layouts::<DotMap, T, 1>(
         device, lhs.buffer, lhs.layout, rhs.buffer, rhs.layout,
     )?;
@@ -238,7 +238,7 @@ where
     input
         .layout
         .validate_storage_len(input.buffer.len())
-        .map_err(crate::application::linalg::map_layout_err)?;
+        .map_err(map_layout_err)?;
     let inner = prepare_map_reduction_with_layouts::<SquareMap, T, N>(
         device,
         input.buffer,

@@ -3,7 +3,8 @@
 //! Mirrors [`crate::reduction`]'s combine-dispatch plumbing: the operator is
 //! resolved to a `fn(T, T) -> Option<T>` at prepare time via
 //! `<Op as CombineExpr<Host>>::value`, and an operator without a host value
-//! function is the typed [`HephaestusError::DispatchFailed`] from
+//! function is the typed [`hephaestus_core::HephaestusError::DispatchFailed`]
+//! from
 //! `crate::combine::unsupported_operator`.
 //!
 //! # Scan order

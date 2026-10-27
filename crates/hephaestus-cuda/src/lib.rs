@@ -85,8 +85,9 @@ pub use application::loss::{CtcKernel, CudaCrossEntropyOps, CudaCtcOps};
 pub use application::masked_fill_seam::CudaMaskedFillOps;
 pub use application::nonzero_seam::CudaNonzeroOps;
 pub use application::pad_seam::CudaPadOps;
-pub use application::parameterized_elementwise::CudaParameterizedUnaryOps;
-pub use application::parameterized_elementwise::parameterized_unary_strided_into;
+pub use application::parameterized_elementwise::{
+    CudaParameterizedUnaryOps, parameterized_unary_strided_into,
+};
 pub use application::prepared_axis_reduction::{
     PreparedAxisReduction, prepare_max_axis_into, prepare_mean_axis_into, prepare_min_axis_into,
     prepare_reduce_axis_into, prepare_sum_axis_into, submit_prepared_axis_reduction_batch,
@@ -105,8 +106,6 @@ pub use application::reduction::{
     min_axis_into, prod_axis, prod_axis_into, reduce_axis, reduce_axis_into, reduction,
     reduction_with_width, sum_axis, sum_axis_into,
 };
-// Scans are the generic accelerator layer's, instantiated at this device
-// through its `DeviceApi` implementation; the backend adds no scan code.
 pub use hephaestus_core::domain::accelerator::scan::{
     cumprod, cumprod_into, cumsum, cumsum_into, scan_axis, scan_axis_into, suffix_prod,
     suffix_prod_into, suffix_sum, suffix_sum_into,
@@ -130,9 +129,8 @@ pub use application::staggered::{
     CudaStaggered3DOps, Staggered3DKernel, Staggered3DParams, StaggeredAxis,
 };
 pub use application::stateful_update::CudaStatefulUpdateOps;
-pub use application::stencil::CudaStencilOps;
 pub use application::stencil::{
-    BoundaryCondition, Laplacian2DKernel, Laplacian2DParams, LaplacianPolarity,
+    BoundaryCondition, CudaStencilOps, Laplacian2DKernel, Laplacian2DParams, LaplacianPolarity,
 };
 pub use application::storage_kernel::{CudaMultiStorageKernel, CudaStorageBinding};
 pub use application::stream::{CudaCommandStream, CudaGroupedPrepared, CudaPrepared};
