@@ -5,13 +5,13 @@ use std::sync::Arc;
 use eunomia::Pod;
 use hephaestus_core::{
     BlockWidth, CombineExpr, ComputeDevice, DeviceBuffer, DialectScalar, HipC, IdentityToken,
-    OpIdentity, Result, reduction_pass_count, validate_reduction_width,
+    OpIdentity, Result, checked_shared_bytes, reduction_pass_count, validate_reduction_width,
 };
 
 use crate::application::pipeline::{
     LaunchConfig, PipelineKey, RocmKernel, cached_kernel, grid_size, launch_kernel,
 };
-use crate::application::reduction::{checked_shared_bytes, shader_source};
+use crate::application::reduction::shader_source;
 use crate::infrastructure::DevicePtr;
 use crate::{RocmBuffer, RocmDevice};
 

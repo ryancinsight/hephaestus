@@ -89,5 +89,5 @@ mod runner;
 pub use runner::{
     SweepDialect, above_flush_floor, assert_parameterized_sweep_within,
     assert_unary_sweep_abs_within, assert_unary_sweep_within, below_cap, sweep_inputs,
-    ulps_from_f64, without_subnormals,
+    ulps_from_reference, without_subnormals,
 };

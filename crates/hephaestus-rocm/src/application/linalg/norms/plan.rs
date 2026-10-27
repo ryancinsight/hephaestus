@@ -1,211 +1,24 @@
-//! Strided dot products, traces, and norms on ROCm.
-//!
-//! One HIP workgroup maps each logical input element and reduces its mapped
-//! value in shared memory. The host packs leto::Layout metadata into a
-//! rank-four representation, so transposed, sliced, and diagonal views use
-//! the same device path as contiguous inputs.
+//! Prepared and retained map-reduction plans on ROCm.
 
 use std::marker::PhantomData;
 use std::sync::Arc;
 
-use eunomia::{Pod, Zeroable};
+use eunomia::Pod;
 use hephaestus_core::{
-    BlockWidth, CombineExpr, ComputeDevice, DeviceBuffer, DialectScalar, HephaestusError, HipC,
-    IdentityToken, MaxOp, OpIdentity, Result, SumOp,
+    BlockWidth, ComputeDevice, DeviceBuffer, DialectScalar, HephaestusError, HipC, IdentityToken,
+    OpIdentity, Result, checked_shared_bytes,
 };
 use leto::Layout;
 
-use super::map_layout_err;
+use super::super::map_layout_err;
+use super::shader::{MapReductionMeta, MapReductionOp, map_shape, map_strides, shader_source};
 use crate::RocmDevice;
-use crate::application::elementwise::{SqrtOp, unary_elementwise_into};
 use crate::application::pipeline::{
     LaunchConfig, PipelineKey, RocmKernel, cached_kernel, grid_size, launch_kernel,
 };
 use crate::application::prepared_reduction::PreparedReductionPlan;
 use crate::application::strided::StridedOperand;
 use crate::infrastructure::{DevicePtr, RocmBuffer};
-
-const MAX_STRIDED_RANK: usize = 4;
-
-#[repr(C)]
-#[derive(Clone, Copy, Pod, Zeroable)]
-pub(crate) struct MapReductionMeta {
-    shape: [u32; 4],
-    a_strides: [i32; 4],
-    b_strides: [i32; 4],
-    offsets: [u32; 4],
-}
-
-const _: () = assert!(core::mem::size_of::<MapReductionMeta>() == 64);
-
-pub(crate) trait MapReductionOp: Copy + Send + Sync + 'static {
-    type ReduceOp: CombineExpr<HipC>;
-
-    const EXPR: &'static str;
-}
-
-#[derive(Clone, Copy, Debug, Default)]
-pub(crate) struct IdentityMap;
-
-#[derive(Clone, Copy, Debug, Default)]
-pub(crate) struct DotMap;
-
-#[derive(Clone, Copy, Debug, Default)]
-struct AbsMap;
-
-#[derive(Clone, Copy, Debug, Default)]
-pub(crate) struct SquareMap;
-
-#[derive(Clone, Copy, Debug, Default)]
-struct MaxAbsMap;
-
-impl MapReductionOp for IdentityMap {
-    type ReduceOp = SumOp;
-
-    const EXPR: &'static str = "lhs";
-}
-
-impl MapReductionOp for DotMap {
-    type ReduceOp = SumOp;
-
-    const EXPR: &'static str = "lhs * rhs";
-}
-
-impl MapReductionOp for AbsMap {
-    type ReduceOp = SumOp;
-
-    const EXPR: &'static str = "abs(lhs)";
-}
-
-impl MapReductionOp for SquareMap {
-    type ReduceOp = SumOp;
-
-    const EXPR: &'static str = "lhs * rhs";
-}
-
-impl MapReductionOp for MaxAbsMap {
-    type ReduceOp = MaxOp;
-
-    const EXPR: &'static str = "abs(lhs)";
-}
-
-pub(crate) fn shader_source<Op, T>(width: BlockWidth) -> String
-where
-    Op: MapReductionOp,
-    T: DialectScalar<HipC> + IdentityToken<Op::ReduceOp, HipC>,
-{
-    format!(
-        r#"
-struct MapReductionMeta {{
-    unsigned int shape[4];
-    int a_strides[4];
-    int b_strides[4];
-    unsigned int offsets[4];
-}};
-
-extern "C" __global__ void map_reduction_kernel(
-    MapReductionMeta meta,
-    const {ty}* a,
-    const {ty}* b,
-    {ty}* output
-) {{
-    extern __shared__ {ty} shared_data[];
-
-    unsigned int tid = threadIdx.x;
-    unsigned int i = blockIdx.x * blockDim.x + tid;
-    {ty} value = {identity};
-    if (i < meta.offsets[3]) {{
-        unsigned int rem = i;
-        int a_off = (int)meta.offsets[0];
-        int b_off = (int)meta.offsets[1];
-        for (int dimension = 3; dimension >= 0; dimension--) {{
-            unsigned int dim = meta.shape[dimension];
-            unsigned int index = rem % dim;
-            rem = rem / dim;
-            a_off += (int)index * meta.a_strides[dimension];
-            b_off += (int)index * meta.b_strides[dimension];
-        }}
-        {ty} lhs = a[a_off];
-        {ty} rhs = b[b_off];
-        value = {expr};
-    }}
-    shared_data[tid] = value;
-    __syncthreads();
-
-    for (unsigned int stride = {width}u / 2u; stride > 0u; stride /= 2u) {{
-        if (tid < stride) {{
-            {ty} lhs = shared_data[tid];
-            {ty} rhs = shared_data[tid + stride];
-            shared_data[tid] = {reduce};
-        }}
-        __syncthreads();
-    }}
-
-    if (tid == 0u) {{
-        output[blockIdx.x] = shared_data[0];
-    }}
-}}
-"#,
-        ty = T::TYPE_TOKEN,
-        identity = <T as IdentityToken<Op::ReduceOp, HipC>>::TOKEN,
-        expr = Op::EXPR,
-        width = width.get(),
-        reduce = <Op::ReduceOp as CombineExpr<HipC>>::EXPR,
-    )
-}
-
-pub(crate) fn checked_shared_bytes<T>(width: BlockWidth) -> Result<u32> {
-    let width = usize::try_from(width.get()).map_err(|_| HephaestusError::DispatchFailed {
-        message: format!(
-            "ROCm map-reduction width {} exceeds usize range",
-            width.get()
-        ),
-    })?;
-    width
-        .checked_mul(core::mem::size_of::<T>())
-        .and_then(|bytes| u32::try_from(bytes).ok())
-        .ok_or_else(|| HephaestusError::DispatchFailed {
-            message: format!(
-                "ROCm map-reduction shared-memory size overflows for width {} and element size {}",
-                width,
-                core::mem::size_of::<T>()
-            ),
-        })
-}
-
-fn map_shape<const N: usize>(shape: [usize; N]) -> Result<[u32; 4]> {
-    const {
-        assert!(
-            N <= MAX_STRIDED_RANK,
-            "ROCm strided reductions support rank <= 4"
-        );
-    }
-    let mut mapped = [1_u32; 4];
-    for (dimension, &extent) in shape.iter().enumerate() {
-        mapped[4 - N + dimension] =
-            u32::try_from(extent).map_err(|_| HephaestusError::DispatchFailed {
-                message: format!("dimension {extent} exceeds u32 range"),
-            })?;
-    }
-    Ok(mapped)
-}
-
-fn map_strides<const N: usize>(strides: [isize; N]) -> Result<[i32; 4]> {
-    const {
-        assert!(
-            N <= MAX_STRIDED_RANK,
-            "ROCm strided reductions support rank <= 4"
-        );
-    }
-    let mut mapped = [0_i32; 4];
-    for (dimension, &stride) in strides.iter().enumerate() {
-        mapped[4 - N + dimension] =
-            i32::try_from(stride).map_err(|_| HephaestusError::DispatchFailed {
-                message: format!("stride {stride} exceeds i32 range"),
-            })?;
-    }
-    Ok(mapped)
-}
 
 pub(crate) struct PreparedMapReduction<'a, Op, T, const N: usize> {
     resources: MapReductionResources<T>,
@@ -476,7 +289,7 @@ where
     })
 }
 
-fn map_reduction<Op, T, const N: usize>(
+pub(super) fn map_reduction<Op, T, const N: usize>(
     device: &RocmDevice,
     a: StridedOperand<'_, T, N>,
     b: StridedOperand<'_, T, N>,
@@ -489,106 +302,3 @@ where
     prepared.dispatch()?;
     Ok(prepared.into_output())
 }
-
-/// Compute the vector dot product `Σᵢ a[i] * b[i]` on the ROCm device.
-///
-/// The two rank-1 operands must have equal logical shapes. Layout validation
-/// occurs before the HIP launch, and the returned buffer contains one scalar.
-pub fn dot<T>(
-    device: &RocmDevice,
-    a: StridedOperand<'_, T, 1>,
-    b: StridedOperand<'_, T, 1>,
-) -> Result<RocmBuffer<T>>
-where
-    T: DialectScalar<HipC> + Pod + OpIdentity<SumOp> + IdentityToken<SumOp, HipC>,
-{
-    if a.layout.shape() != b.layout.shape() {
-        return Err(HephaestusError::DispatchFailed {
-            message: format!(
-                "dot product shape mismatch: lhs {:?}, rhs {:?}",
-                a.layout.shape(),
-                b.layout.shape()
-            ),
-        });
-    }
-    map_reduction::<DotMap, T, 1>(device, a, b)
-}
-
-/// Compute the trace tr(A) = Σᵢ aᵢᵢ of a square matrix on ROCm.
-pub fn trace<T>(device: &RocmDevice, matrix: StridedOperand<'_, T, 2>) -> Result<RocmBuffer<T>>
-where
-    T: DialectScalar<HipC> + Pod + OpIdentity<SumOp> + IdentityToken<SumOp, HipC>,
-{
-    let [rows, cols] = matrix.layout.shape();
-    if rows != cols {
-        return Err(HephaestusError::DispatchFailed {
-            message: format!(
-                "trace requires a square matrix, got shape {:?}",
-                matrix.layout.shape()
-            ),
-        });
-    }
-    if rows == 0 {
-        return device.upload(&[T::IDENTITY]);
-    }
-    let diagonal_stride = matrix.layout.strides()[0]
-        .checked_add(matrix.layout.strides()[1])
-        .ok_or_else(|| HephaestusError::DispatchFailed {
-            message: "trace diagonal stride overflows isize".to_string(),
-        })?;
-    let diagonal_layout = Layout::try_new([rows], [diagonal_stride], matrix.layout.offset())
-        .expect("invariant: submatrix layout derives from a validated parent");
-    let diagonal = StridedOperand {
-        buffer: matrix.buffer,
-        layout: &diagonal_layout,
-    };
-    map_reduction::<IdentityMap, T, 1>(device, diagonal, diagonal)
-}
-
-/// Compute the entrywise L1 norm Σ |x| on ROCm.
-pub fn norm_l1<T, const N: usize>(
-    device: &RocmDevice,
-    view: StridedOperand<'_, T, N>,
-) -> Result<RocmBuffer<T>>
-where
-    T: DialectScalar<HipC> + Pod + OpIdentity<SumOp> + IdentityToken<SumOp, HipC>,
-{
-    map_reduction::<AbsMap, T, N>(device, view, view)
-}
-
-/// Scalar types supported by ROCm L2/Frobenius norms.
-pub trait L2NormScalar:
-    DialectScalar<HipC> + Pod + OpIdentity<SumOp> + IdentityToken<SumOp, HipC>
-{
-}
-
-impl L2NormScalar for f32 {}
-
-/// Compute the L2/Frobenius norm sqrt(Σ x²) on ROCm.
-pub fn norm_l2<T, const N: usize>(
-    device: &RocmDevice,
-    view: StridedOperand<'_, T, N>,
-) -> Result<RocmBuffer<T>>
-where
-    T: L2NormScalar,
-{
-    let squared_sum = map_reduction::<SquareMap, T, N>(device, view, view)?;
-    let output = device.alloc_uninitialized::<T>(1)?;
-    unary_elementwise_into::<SqrtOp, T>(device, &squared_sum, &output, BlockWidth::DEFAULT)?;
-    Ok(output)
-}
-
-/// Compute the max-magnitude norm max |x| on ROCm.
-pub fn norm_max<T, const N: usize>(
-    device: &RocmDevice,
-    view: StridedOperand<'_, T, N>,
-) -> Result<RocmBuffer<T>>
-where
-    T: DialectScalar<HipC> + Pod + OpIdentity<MaxOp> + IdentityToken<MaxOp, HipC>,
-{
-    map_reduction::<MaxAbsMap, T, N>(device, view, view)
-}
-
-#[cfg(test)]
-#[path = "tests_norms.rs"]
-mod tests;

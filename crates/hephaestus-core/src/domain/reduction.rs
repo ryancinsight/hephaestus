@@ -166,6 +166,34 @@ pub fn validate_reduction_width(width: BlockWidth) -> Result<()> {
     Ok(())
 }
 
+/// Return the dynamic shared-memory byte count a reduction workgroup needs.
+///
+/// Tree reductions stage one element per lane in dynamic shared memory, so the
+/// requirement is the block width times the element size. Backend launches
+/// carry the byte count in a `u32`, so an overflowing product is a dispatch
+/// failure rather than a silently truncated allocation.
+///
+/// # Errors
+/// Returns [`HephaestusError::DispatchFailed`] when the block width does not
+/// fit a host `usize`, when the width times the element size overflows
+/// `usize`, or when the byte count exceeds the `u32` launch range.
+pub fn checked_shared_bytes<T>(width: BlockWidth) -> Result<u32> {
+    let width_elements =
+        usize::try_from(width.get()).map_err(|_| HephaestusError::DispatchFailed {
+            message: format!("reduction block width {} exceeds usize range", width.get()),
+        })?;
+    width_elements
+        .checked_mul(core::mem::size_of::<T>())
+        .and_then(|bytes| u32::try_from(bytes).ok())
+        .ok_or_else(|| HephaestusError::DispatchFailed {
+            message: format!(
+                "reduction shared-memory size overflows for block width {} and element size {}",
+                width.get(),
+                core::mem::size_of::<T>()
+            ),
+        })
+}
+
 /// Return the number of tree-reduction passes needed to reduce `len` elements.
 ///
 /// The value is backend-neutral host planning: each pass emits

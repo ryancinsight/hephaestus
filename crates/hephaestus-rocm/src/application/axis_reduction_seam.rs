@@ -1,6 +1,6 @@
 //! ROCm/HIP implementation of the device-neutral axis-reduction seam.
 //!
-//! The kernels live in [`crate::application::axis_reduction`] and the
+//! The kernels live in [`crate::application::reduction`] and the
 //! reusable plans in [`crate::application::prepared_axis_reduction`]; this
 //! module only adapts them to [`hephaestus_core::AxisReductionOps`] so a
 //! consumer — or the conformance suite — can reduce along an axis without
@@ -16,10 +16,10 @@ use hephaestus_core::{
 
 use crate::RocmBuffer;
 use crate::RocmDevice;
-use crate::application::axis_reduction::{mean_axis_into, prod_axis_into, reduce_axis_into};
 use crate::application::prepared_axis_reduction::{
     PreparedAxisReduction, prepare_reduce_axis_into,
 };
+use crate::application::reduction::{mean_axis_into, prod_axis_into, reduce_axis_into};
 
 /// Axis reductions for one ROCm device.
 ///

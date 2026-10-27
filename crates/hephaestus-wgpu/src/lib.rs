@@ -111,15 +111,10 @@ pub use application::sparse::{
 pub use application::split_seam::{WgpuSplitOps, split_into};
 pub use application::stack_seam::{WgpuStackOps, stack_into};
 pub use application::stateful_update::WgpuStatefulUpdateOps;
-pub use application::stencil::WgpuStencilOps;
 pub use application::stencil::{
-    BoundaryCondition, Laplacian2DKernel, Laplacian2DParams, LaplacianPolarity,
-};
-pub use application::stencil::{
-    FixedFd3DKernel, FixedFd3DParams, FixedFd3DScheme, WgpuFixedFd3DOps,
-};
-pub use application::stencil::{
-    Staggered3DKernel, Staggered3DParams, StaggeredAxis, WgpuStaggered3DOps,
+    BoundaryCondition, FixedFd3DKernel, FixedFd3DParams, FixedFd3DScheme, Laplacian2DKernel,
+    Laplacian2DParams, LaplacianPolarity, Staggered3DKernel, Staggered3DParams, StaggeredAxis,
+    WgpuFixedFd3DOps, WgpuStaggered3DOps, WgpuStencilOps,
 };
 pub use application::storage_kernel::{
     WgslBinaryStorageKernel, WgslMultiStorageKernel, WgslStorageBinding, WgslStorageBindingLayout,

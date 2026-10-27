@@ -8,7 +8,7 @@
 //! operator's host-side identity (`OpIdentity::IDENTITY`), so the erased
 //! `Prepared` associated types never need to name `Op` again. An operator
 //! with no host value function is the typed
-//! [`HephaestusError::DispatchFailed`] from
+//! [`hephaestus_core::HephaestusError::DispatchFailed`] from
 //! `crate::combine::unsupported_operator`, never a silent identity or no-op.
 //!
 //! # Reduction order

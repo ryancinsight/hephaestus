@@ -6,8 +6,6 @@ pub mod adaptive_pooling_seam;
 pub mod arg_reduce_seam;
 /// Native HIP scaled dot-product attention.
 pub mod attention;
-/// Rank-2 axis reductions over leto layouts.
-pub mod axis_reduction;
 /// Device-neutral axis-reduction seam implementation.
 pub mod axis_reduction_seam;
 /// Device-neutral n-D concatenation seam implementation.
@@ -74,7 +72,7 @@ pub mod prepared_strided_elementwise;
 pub mod random;
 /// Device-neutral seeded random initialization seam.
 pub mod random_seam;
-/// Contiguous multi-pass tree reductions.
+/// Contiguous tree and rank-2 axis reductions.
 pub mod reduction;
 /// Device-neutral n-D circular-shift seam implementation.
 pub mod roll_seam;
