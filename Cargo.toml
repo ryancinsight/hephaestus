@@ -65,7 +65,7 @@ syn = { version = "2.0.119", features = ["full", "visit"] }
 # Canonical Git sources are unpinned; Cargo.lock owns exact source identity.
 aequitas = { version = ">=0.3.1, <0.5.0", git = "https://github.com/ryancinsight/aequitas", default-features = false }
 # Eunomia 0.10 carries the current scalar and Bessel contracts.
-eunomia = { version = ">=0.10.0, <0.12.0", git = "https://github.com/ryancinsight/eunomia", default-features = false }
+eunomia = { version = ">=0.10.0, <0.13.0", git = "https://github.com/ryancinsight/eunomia", default-features = false }
 # leto host-side layout metadata (shape/strides/offset + broadcast) reused as
 # the backend-agnostic indexing vocabulary per atlas ADR 0001. Layout/array
 # types only â€” no CPU compute dependency (leto-ops is not pulled).
