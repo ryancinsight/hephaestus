@@ -96,4 +96,4 @@
 | [0085](0085-device-neutral-dot-seam.md) | Device-neutral inner-product seam | Accepted |
 | [0086](0086-version-existing-provider-breaks.md) | Version the existing provider API breaks | Accepted |
 | [0087](0087-embedding-table-scatter-add-seam.md) | Embedding-table scatter-add backward seam | Accepted |
-| [0020](0020-release-scope-1-0.md) | Hephaestus release scope for 1.0 | Accepted |
+| [0088](0088-release-scope-1-0.md) | Hephaestus release scope for 1.0 | Accepted |

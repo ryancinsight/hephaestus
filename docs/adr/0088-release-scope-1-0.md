@@ -1,4 +1,4 @@
-# ADR 0020: Hephaestus release scope for 1.0
+# ADR 0088: Hephaestus release scope for 1.0
 
 - Status: Accepted
 - Date: 2026-11-10
