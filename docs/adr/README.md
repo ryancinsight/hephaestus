@@ -28,7 +28,6 @@
 | [0017](0017-prepared-sparse-parity.md) | prepared sparse parity | Accepted |
 | [0018](0018-prepared-map-reduction-parity.md) | prepared map-reduction parity | Accepted |
 | [0019](0019-scan-product-parity.md) | cumulative-product scan parity | Accepted |
-| [0020](0020-release-scope-1-0.md) | Hephaestus release scope for 1.0 | Accepted |
 | [0020](0020-metal-random-parity.md) | Metal seeded-random parity | Accepted |
 | [0021](0021-metal-fluent-linalg-parity.md) | Metal fluent linear-algebra parity | Accepted |
 | [0022](0022-metal-authored-kernel-parity.md) | Metal authored-kernel parity | Accepted |
@@ -97,3 +96,4 @@
 | [0085](0085-device-neutral-dot-seam.md) | Device-neutral inner-product seam | Accepted |
 | [0086](0086-version-existing-provider-breaks.md) | Version the existing provider API breaks | Accepted |
 | [0087](0087-embedding-table-scatter-add-seam.md) | Embedding-table scatter-add backward seam | Accepted |
+| [0020](0020-release-scope-1-0.md) | Hephaestus release scope for 1.0 | Accepted |
