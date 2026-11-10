@@ -15,6 +15,7 @@
 
 ## HEPH-MACOS-METAL-CONFORMANCE-1 — Canonical Metal provider verification [patch] — todo
 - Priority: correctness.
+- milestone: M-backend-parity.
 - Remaining acceptance: exact-head hosted Metal and required provider gates,
   followed by the authorized provider merge.
 - Outcome: macOS CI triggers on WGPU, core, conformance, facade, and test-policy
