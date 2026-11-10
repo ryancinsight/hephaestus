@@ -74,3 +74,22 @@ The final lock refresh follows upstream integration. Backend gates use that
 same committed Git graph; obsolete sibling path patches and lock rewrites are
 removed. Exact-source API/native/hosted evidence remains required, and source
 acceptance does not establish registry publication or unavailable GPU hardware.
+
+## Leto 0.48 cohort application
+
+2026-11-10: Admit the 0.48 Leto compatibility line in both requirements while
+retaining the supported 0.46 and 0.47 lines. The selected provider adds
+caller-owned `concat_into` and `stack_into` operations and changes COO-to-CSR
+allocation documentation and capacity trimming. Source inspection finds no
+public declaration removal between the committed 0.47.1 and 0.48.0 provider
+revisions. Leto's native API comparison classifies that exact change as
+patch-compatible; the declaration scan alone does not establish trait
+coherence, derives, dependency identity, or downstream compatibility.
+
+Hephaestus exposes Leto-owned types and traits in public contracts, so the
+metadata and operation requirements advance together and the standalone lock
+records one exact provider identity. No conversion adapter or duplicate Leto
+source is retained. Native consumer gates and SemVer comparison against the
+committed base, locked provider baselines, and the released contract classify
+the actual effect; unsupported comparisons remain unverified. This dependency
+migration does not authorize a Hephaestus version change or publication.
