@@ -1028,8 +1028,8 @@ dependencies = [
 
 [[package]]
 name = "moirai-core"
-version = "0.11.3"
-source = "git+https://github.com/ryancinsight/Moirai.git#311af1d7f151fbf3151ebf26a98b5f3d09e10842"
+version = "0.11.4"
+source = "git+https://github.com/ryancinsight/Moirai.git#8a5bf9c1dfa71da2eaba990412f9ea6e0b63cef8"
 dependencies = [
  "bytemuck",
  "libc",
@@ -1040,8 +1040,8 @@ dependencies = [
 
 [[package]]
 name = "moirai-sync"
-version = "0.11.3"
-source = "git+https://github.com/ryancinsight/Moirai.git#311af1d7f151fbf3151ebf26a98b5f3d09e10842"
+version = "0.11.4"
+source = "git+https://github.com/ryancinsight/Moirai.git#8a5bf9c1dfa71da2eaba990412f9ea6e0b63cef8"
 dependencies = [
  "libc",
  "moirai-core",
@@ -1050,8 +1050,8 @@ dependencies = [
 
 [[package]]
 name = "moirai-utils"
-version = "0.11.3"
-source = "git+https://github.com/ryancinsight/Moirai.git#311af1d7f151fbf3151ebf26a98b5f3d09e10842"
+version = "0.11.4"
+source = "git+https://github.com/ryancinsight/Moirai.git#8a5bf9c1dfa71da2eaba990412f9ea6e0b63cef8"
 
 [[package]]
 name = "munge"
