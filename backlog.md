@@ -945,3 +945,16 @@ status ledger that stood here is program history; recover any entry with
 - Verification: device measurement before/after on the same host and
   workload, strict Clippy, independent review.
 - Last-update: 2026-10-14.
+
+<a id="heph-fft-plan-requirements"></a>
+
+## HEPH-FFT-PLAN-REQUIREMENTS — Report what an FFT plan needs before anything is allocated [minor] — todo
+- Priority: feature.
+- milestone: M-compute-contracts; serves the exit check "pass portable WGPU tests".
+- basis: 0a4e22f133e2c392554d640fb2a5606f052388fc.
+- Driver: kwavers `KW-GPU-FFT-PLAN-CAPACITY`. A consumer that must refuse an over-capacity request before it creates any buffer cannot learn what a plan needs: `prepare_fft` takes operand buffers that already exist, and its refusal is `HephaestusError::InvalidConfiguration`, whose one field is a message.
+- Read at the basis: `crates/hephaestus-wgpu/src/application/fft/plan.rs` selects a strategy per axis from the device limits (`select_axis_strategy`), sizes the workspace from it (`axis_workspace_elements`; a non-power-of-two axis takes m values per line, line 73), and `validate_storage_limit` (line 163) refuses a volume, workspace or twiddle buffer over `max_buffer_size` (line 228) and a workspace over 256 values times `max_compute_workgroups_per_dimension` (line 236). All of it is private to `WgpuFftPlan::new`, which allocates the workspace at lines 430 and 431.
+- Outcome: a public query takes a device, a shape, the active axes and the scalar type, and returns what the plan needs (each buffer with its bytes, and the dispatch workgroups) or a typed refusal that carries the quantity that exceeds, its value and the limit. It allocates nothing and is computed by the code `WgpuFftPlan::new` uses. `prepare_fft` and `prepare_fft_axes` return the same typed refusal.
+- Acceptance: for an `f32` 17x16x16 plan on a device with a `max_buffer_size` of 61440 the query returns the refusal naming the workspace, 65536 bytes and 61440; for 200x200x200 at a `max_compute_workgroups_per_dimension` of 65535 it names the dispatch, 80000 workgroups and 65535; `prepare_fft` on the same inputs returns the same variant and values; a plan the query admits prepares; a device test at each limit holds with the limit one unit higher; the SemVer comparison classifies the error change.
+- Observed for the driver, by runs in kwavers at this plan code (the file is unchanged between the revision kwavers locks, 72ffa0577952411a27182782637248a2c8a02ead, and the basis): the two refusal messages above with those values. Expected values derive from the shape: 17 is not a power of two, m = 64, and 64 x 256 lines x 4 bytes = 65536; 200 gives m = 512, and 512 x 40000 lines / 256 = 80000.
+- Needs: none. Next step: choose the error shape (a new variant of `HephaestusError`, or a field on an existing one) against the SemVer gate, then extract the sizing from `WgpuFftPlan::new` into the query.
