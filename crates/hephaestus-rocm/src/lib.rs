@@ -41,6 +41,10 @@ pub use infrastructure::{RocmBuffer, RocmDevice};
 pub use application::adaptive_pooling_seam::RocmAdaptivePoolingOps;
 pub use application::arg_reduce_seam::RocmArgReduceOps;
 pub use application::attention::RocmAttentionOps;
+pub use application::axis_reduction::{
+    max_axis, max_axis_into, mean_axis, mean_axis_into, min_axis, min_axis_into, prod_axis,
+    prod_axis_into, reduce_axis, reduce_axis_into, sum_axis, sum_axis_into,
+};
 pub use application::axis_reduction_seam::RocmAxisReductionOps;
 pub use application::cat_seam::RocmCatOps;
 #[cfg(all(feature = "rocm", target_os = "linux"))]
@@ -114,11 +118,7 @@ pub use application::prepared_reduction::{
 pub use application::prepared_strided_elementwise::{PreparedStridedBinary, PreparedStridedUnary};
 pub use application::random::{normal_with_seed, uniform_with_seed};
 pub use application::random_seam::RocmRandomOps;
-pub use application::reduction::{
-    MaxOp, MinOp, ProdOp, SumOp, max_axis, max_axis_into, mean_axis, mean_axis_into, min_axis,
-    min_axis_into, prod_axis, prod_axis_into, reduce_axis, reduce_axis_into, reduction,
-    reduction_with_width, sum_axis, sum_axis_into,
-};
+pub use application::reduction::{MaxOp, MinOp, ProdOp, SumOp, reduction, reduction_with_width};
 pub use hephaestus_core::domain::accelerator::scan::{
     cumprod, cumprod_into, cumsum, cumsum_into, scan_axis, scan_axis_into, suffix_prod,
     suffix_prod_into, suffix_sum, suffix_sum_into,

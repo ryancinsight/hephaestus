@@ -9,11 +9,11 @@ use hephaestus_core::{
 };
 
 use crate::RocmDevice;
-use crate::application::pipeline::{PipelineKey, RocmKernel, cached_kernel};
-use crate::application::reduction::{
+use crate::application::axis_reduction::{
     axis_len, axis_reduction_shader_source, launch_axis_dispatch, mean_axis_shader_source,
     plan_axis_reduction_dispatch, reject_empty_axis,
 };
+use crate::application::pipeline::{PipelineKey, RocmKernel, cached_kernel};
 use crate::application::strided::StridedOperand;
 
 /// A reusable ROCm rank-2 axis reduction over fixed input and output views.

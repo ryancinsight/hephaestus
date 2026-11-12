@@ -9,10 +9,10 @@ use leto::Layout;
 
 use crate::RocmDevice;
 use crate::application::pipeline::{PipelineKey, cached_kernel};
+use crate::application::reduction::reduction;
 use crate::application::strided::StridedOperand;
 use crate::infrastructure::RocmBuffer;
 
-use super::full::reduction;
 use super::plan::{launch_axis_dispatch, plan_axis_reduction_dispatch};
 use super::shaders::axis_reduction_shader_source;
 

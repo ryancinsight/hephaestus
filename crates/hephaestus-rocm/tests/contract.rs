@@ -19,6 +19,9 @@ use hephaestus_core::{
 };
 #[cfg(feature = "decomposition")]
 use hephaestus_rocm::MatrixDecompose;
+use hephaestus_rocm::application::axis_reduction::{
+    max_axis, mean_axis, mean_axis_into, min_axis, prod_axis, prod_axis_into, reduce_axis, sum_axis,
+};
 use hephaestus_rocm::{
     AbsOp, AddOp, AsGpuMatrixOperand, CosOp, CumSumOp, DivOp, EluGradOp, EluOp, EqOp, ExpNegOp,
     ExpOp, GeluTanhGradOp, GeluTanhOp, GpuCsrMatrix, IdentityOp, LnOp, MatrixFunction, MatrixNorm,
@@ -27,14 +30,13 @@ use hephaestus_rocm::{
     SiluOp, SinOp, SoftplusGradOp, SoftplusOp, SqrtOp, StridedOperand, SubOp, batched_matmul,
     batched_matmul_into, binary_elementwise, binary_elementwise_into, binary_elementwise_strided,
     binary_elementwise_strided_into, binary_elementwise_strided_typed, cumprod, cumprod_into,
-    cumsum, dot, kron, kron_into, matmul, matmul_into, matpow, max_axis, mean_axis, mean_axis_into,
-    min_axis, norm_l1, norm_l2, norm_max, normal_with_seed, prepare_dot, prepare_max_axis_into,
-    prepare_mean_axis_into, prepare_norm_l2, prepare_reduction, prepare_reduction_with_width,
-    prepare_sum_axis_into, prod_axis, prod_axis_into, reduce_axis, reduction_with_width,
+    cumsum, dot, kron, kron_into, matmul, matmul_into, matpow, norm_l1, norm_l2, norm_max,
+    normal_with_seed, prepare_dot, prepare_max_axis_into, prepare_mean_axis_into, prepare_norm_l2,
+    prepare_reduction, prepare_reduction_with_width, prepare_sum_axis_into, reduction_with_width,
     scalar_elementwise, scalar_elementwise_strided, scalar_elementwise_strided_into, scan_axis,
     scan_axis_into, spmm, spmm_into, spmv, spmv_many, spmv_many_into,
     submit_prepared_axis_reduction_batch, submit_prepared_reduction_batch, suffix_prod,
-    suffix_prod_into, suffix_sum, suffix_sum_into, sum_axis, trace, unary_elementwise,
+    suffix_prod_into, suffix_sum, suffix_sum_into, trace, unary_elementwise,
     unary_elementwise_strided, unary_elementwise_strided_into, uniform_with_seed,
 };
 #[cfg(feature = "decomposition")]
