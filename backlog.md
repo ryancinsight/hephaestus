@@ -78,6 +78,7 @@
 
 ## HEPH-SHAPE-OPS-PROVIDER-1 — Device-neutral shape/indexing seam [minor] [arch] — todo
 - Priority: feature.
+- milestone: M-backend-parity.
 - Status: split one op at a time (per ADR 0062's precedent), not one
   `ShapeOps` seam. Delivered: `PadOps` (ADR 0062), `RollOps` (ADR 0069),
   `TriangularOps` (ADR 0070, tril/triu) — all host + wgpu.
@@ -105,6 +106,7 @@
 
 ## HEPH-TOPK-ARGMINMAX-PROVIDER-1 — CUDA/ROCm for topk/argmax/argmin [minor] — todo
 - Priority: feature.
+- milestone: M-backend-parity.
 - Status: `ArgReduceOps` (argmax/argmin, ADR 0063) and `TopKOps` (topk, ADR
   0066) both delivered — host + wgpu, differential-tested including tie-break
   cases. Narrowed to the remaining backends and the `assert_backend_contract`
@@ -124,6 +126,7 @@
 
 ## HEPH-EMBEDDING-GATHER-PROVIDER-1 — Embedding-gather gradient (scatter-add) [minor] — todo
 - Priority: feature.
+- milestone: M-backend-parity.
 - Status: `EmbeddingOps::scatter_add_into` delivered per ADR 0087 — host +
   wgpu (two-pass range-check + output-parallel accumulate), ascending
   position-order contract with an order-sensitive conformance fixture, plus
@@ -147,6 +150,7 @@
 
 ## HEPH-INTERPOLATION-PROVIDER-1 — CUDA/ROCm for interpolation [minor] — todo
 - Priority: feature.
+- milestone: M-backend-parity.
 - Status: `InterpolationOps` (nearest/linear, ADR 0067) delivered — host +
   wgpu, align-corners convention, differential-tested including the
   `in_len == 1` and `out_len == 1` degenerate cases. Bilinear is not a
@@ -170,6 +174,7 @@
 
 ## HEPH-ADAPTIVE-POOLING-PROVIDER-1 — CUDA/ROCm for adaptive pooling [minor] — todo
 - Priority: feature.
+- milestone: M-backend-parity.
 - Status: `AdaptivePoolingOps` (avg/max, ADR 0068) delivered — host + wgpu,
   differential-tested including the non-divisible-extent case (windows can
   overlap, matching the reference algorithm) and the `out_len == 1`/
@@ -192,6 +197,7 @@
 
 ## HEPH-DEVICE-DOT-CROSS-PROVIDER-1 — Device-resident cross product; coeus dot-binding gap [patch] — todo
 - Priority: feature.
+- milestone: M-backend-parity.
 - Status: audited (ADR 0064). `DenseVectorOps::dot`/`norm_l2`/`norm_l1`/
   `norm_max` already dispatch entirely on-device on wgpu (only the reduced
   scalar downloads) — the reported "coeus copies full operands to host"
@@ -213,6 +219,7 @@
 
 ## HEPH-FUSED-EXPR-ROCM-METAL-1 — Fused-expression dispatch on ROCm [minor] [arch] — todo
 - Priority: feature.
+- milestone: M-backend-parity.
 - Status: `RocmFusionOps` landed; the C-dialect generator, scalar
   vocabulary, layout record, and pipeline key are now owned once in
   `hephaestus_core::fusion` (ADR 0055 rev. 2026-10-20) with CUDA/HIP
@@ -231,6 +238,7 @@
 
 ## HEPH-ROCM-WINDOWS-HIP-RUNTIME-1 — Support the validated Windows HIP substrate [minor] — todo
 - Priority: feature.
+- milestone: M-compute-contracts.
 - Outcome: split the current Linux-only ROCm runtime boundary so the Windows
   HIP SDK path is enabled only after its runtime compiler, device discovery,
   buffer, stream, and convolution/attention contracts pass on supported AMD
@@ -246,6 +254,7 @@
 <a id="hephaestus-scan-leto-001"></a>
 
 ## HEPHAESTUS-SCAN-LETO-001 — Share the Leto scan clause across scalar types — review
+- milestone: M-compute-contracts.
 - Outcome: One scalar-generic long-line Leto differential validates every backend's scan path.
 - Scope: conformance clause, exports, composite caller, five backend scan tests and this item; no kernel changes.
 - Acceptance: Replace the type-specific helper with one generic clause, instantiate it for i32 and f32 on each backend, preserve signed inputs and exact Leto equality, and keep type_suffixed_fns at or below baseline.
@@ -269,6 +278,7 @@
 - Last-update: 2026-09-07; driver: [PR #285](https://github.com/ryancinsight/hephaestus/pull/285).
 
 ## HEPH-STAGGERED-3D-ROCM — ROCm kernels for the staggered pair [minor] — todo <a id="heph-staggered-3d-rocm"></a>
+- milestone: M-backend-parity.
 
 - **Outcome:** `RocmStaggered3DOps` implementing `Staggered3DOps<RocmDevice>`,
   judged by the same conformance clauses the WGPU and CUDA backends pass.
@@ -329,10 +339,12 @@
   green on a CUDA host.
 
 ## HEPH-CUDA-OXIDE-MEMCPY2D-ABI [patch] — in-progress
+- milestone: M-compute-contracts.
 
 - Incorporated into [HEPH-CUDA-DRIVER-BOUNDARY](#heph-cuda-driver-boundary); provider-owned ABI replaces the upstream dependency and per-row workaround.
 
 ## HEPH-FFT-PROVIDER-1 [minor] [arch] [perf] — in progress
+- milestone: M-backend-parity.
 
 - Owner: Codex session `01a0253c-6013-7552-99cc-36bbbcf77f6d`; provider
   readback correction is on `perf/wgpu-readback-completion-pool` and consumer
@@ -488,6 +500,7 @@
   remain open.
 
 ## HEPH-BOOK-REGROUND-1 [patch] [docs] — in progress
+- milestone: M-compute-contracts.
 
 - Owner: current Atlas session on `fix/hephaestus-book-reground-1`; the dirty
   primary checkout remains outside this scope.
@@ -516,6 +529,7 @@
   cleanup is intentionally outside this lane.
 
 ## HEPH-BOOK-TEST-2026-08-20 [patch] — in progress
+- milestone: M-compute-contracts.
 
 - PR #214 exposed a real mdBook 0.5.4 contract defect after the package build
   passed: the included HostDevice and capabilities examples lacked explicit
@@ -527,6 +541,7 @@
   subject to the shared Atlas overlay lock-form mismatch.
 
 ## HEPH-FDTD-PROVIDER-1 [minor] [arch] — in progress
+- milestone: M-backend-parity.
 
 - Owner: Codex on `codex/hephaestus-fdtd-107`; scope: the device-neutral
   collocated 3D FDTD contract, WGPU implementation, provider value contract,
@@ -555,10 +570,8 @@
   packages pass exact-source crates.io dry runs.
 - Blocked by: the moirai-0.9 provider advance (moirai-sync `^0.8.2` no longer
   resolves against Moirai HEAD 0.9.2); this branch carries that advance.
-  Re-open if 0.9 resolution regresses.
-
-## HEPH-STATEFUL-ZERO-LR-1 [patch] — in-progress
-
+  Re-open if 0.9 resolution regresses.## HEPH-STATEFUL-ZERO-LR-1 [patch] — in-progress
+- milestone: M-compute-contracts.
 - Owner: Codex on `codex/hephaestus-zero-learning-rate`; scope: stateful-update
   parameter validation, focused contracts, and release records.
 - Outcome: every stateful-update parameter contract accepts a finite zero
@@ -607,6 +620,7 @@ Source decision: [Atlas ADR 0001](../../docs/adr/0001-gpu-accelerator-substrate.
   the same matrix before merge. The Coeus consumer cutover is the next item.
 
 ## HEPH-ATTENTION-PROVIDER-1 [minor] [arch] — provider side complete; Coeus cutover open
+- milestone: M-backend-parity.
 
 - Composition note (2026-07-31, session-2026-07-30-board-ssot): commit
   `a23ee9b` on this lane bundles the attention frontier's uncommitted
@@ -640,10 +654,8 @@ Source decision: [Atlas ADR 0001](../../docs/adr/0001-gpu-accelerator-substrate.
   into `src/attention/assertions.rs`; the provider conformance scan returns
   `oversized_files=38`, down from 39. CUDA `32026666522`, ROCm `32026666500`,
   WGPU `32026666544`, and Metal `32026666549` pass. The direct Coeus cutover
-  remains the open dependent item.
-
-## HEPH-PARAMETERIZED-UNARY-1 [minor] [arch] — in-progress
-
+  remains the open dependent item.## HEPH-PARAMETERIZED-UNARY-1 [minor] [arch] — in-progress
+- milestone: M-backend-parity.
 - Owner: Codex on `codex/hephaestus-parameterized-unary`; scope:
   provider-owned runtime-parameter unary expressions, Hardtanh and Threshold
   forward/gradient implementations across WGPU, CUDA, ROCm, and Metal,
@@ -662,6 +674,7 @@ Source decision: [Atlas ADR 0001](../../docs/adr/0001-gpu-accelerator-substrate.
 - Status: in-progress 2026-07-31.
 
 ## HEPH-CONVOLUTION-PROVIDER-1 [minor] [arch] — in progress
+- milestone: M-backend-parity.
 
 - Owner: Codex on `codex/hephaestus-compute-seams`; claimed scope:
   `crates/hephaestus-core/src/domain/convolution/`,
@@ -706,6 +719,7 @@ Source decision: [Atlas ADR 0001](../../docs/adr/0001-gpu-accelerator-substrate.
   jobs skip because their repository variables are unset.
 
 ## HEPH-ROCM-SUBSTRATE-1 [arch] — in-review
+- milestone: M-compute-contracts.
 
 - Owner: Codex; scope: new `hephaestus-rocm` crate implementing the existing
   `ComputeDevice`, capability, and acquisition seams with HIP/ROCm device
@@ -841,6 +855,7 @@ status ledger that stood here is program history; recover any entry with
 
 ## HEPH-WGSL-F64-TRANSCENDENTALS-1 — Width-valid f64 transcendentals on Vulkan [minor] — todo
 - Priority: feature.
+- milestone: M-backend-parity.
 - Outcome: f64 `exp`/`log`/`pow`/`tanh` and the other GLSL.std.450
   precision-restricted builtins compute on Vulkan through WGSL routines built
   only from width-unrestricted f64 operations (add, multiply, `fma`,
@@ -856,6 +871,7 @@ status ledger that stood here is program history; recover any entry with
 <a id="heph-rocm-product-validation-1"></a>
 
 ## HEPH-ROCM-PRODUCT-VALIDATION-1 — Mirror CUDA product validation on ROCm [patch] — todo
+- milestone: M-backend-parity.
 - Outcome: ROCm matrix and Kronecker products get the checked-address and
   empty-sum contracts #487 landed for CUDA.
 - Scope: `crates/hephaestus-rocm/src/application/linalg/` (`mod.rs`,
@@ -878,6 +894,7 @@ status ledger that stood here is program history; recover any entry with
 <a id="heph-roll-f64-gpu-1"></a>
 
 ## HEPH-ROLL-F64-GPU-1 — Run the n-D roll contract at f64 on CUDA/ROCm [patch] — todo
+- milestone: M-backend-parity.
 - Outcome: the #483 n-D roll contract runs at f64 on CUDA and ROCm devices.
 - Scope: `crates/hephaestus-{cuda,rocm}/tests/roll_contracts.rs` (one line
   each).
@@ -893,6 +910,7 @@ status ledger that stood here is program history; recover any entry with
 <a id="heph-backend-contract-fold-1"></a>
 
 ## HEPH-BACKEND-CONTRACT-FOLD-1 — Fold all seams into assert_backend_contract [minor] — todo
+- milestone: M-compute-contracts.
 - Outcome: every device-neutral seam folds into the
   `assert_backend_contract` aggregate with per-backend instantiation.
 - Scope: `crates/hephaestus-conformance/src/assert_backend.rs`, five
@@ -913,6 +931,7 @@ status ledger that stood here is program history; recover any entry with
 <a id="heph-cuda-reduce-throughput-1"></a>
 
 ## HEPH-CUDA-REDUCE-THROUGHPUT-1 — Fix CUDA axis-reduction serial collapse [patch] — todo
+- milestone: M-backend-parity.
 - Outcome: CUDA reductions run at memory-bandwidth pace.
 - Scope: `hephaestus-cuda` axis-reduction kernel + plan (the Coeus entry path),
   then the Coeus full-reduction seam. `coeus-cuda` delegates identically to
