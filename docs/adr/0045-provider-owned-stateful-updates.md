@@ -2,7 +2,7 @@
 
 - Status: Accepted
 - Date: 2026-08-01
-- Refs: `backlog.md#heph-stateful-update-1`; ADR 0041 (generic provider
+- Refs: PR #174 (merge `2dc777b5`); ADR 0041 (generic provider
   conformance); Coeus `OptimizerOps` consumer migration.
 
 ## Context
