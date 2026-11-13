@@ -4,6 +4,7 @@
 ## HEPH-EUNOMIA-010-COHORT — restore provider compatibility [minor] — blocked
 
 - Priority: correctness.
+- milestone: M-compute-contracts.
 - Outcome: Hephaestus 0.22 consumes one Eunomia 0.10/Leto 0.46 provider identity without Rust implementation changes.
 - Scope: workspace/internal and provider versions, canonical lock, pre-1.0 migration and backend CI's exact source graph. Existing macOS/kernel work retains its owner.
 - Acceptance: strict workspace Clippy, complete host and available Metal value/rejection tests, docs/doctests, API comparisons and applicable hosted backend CI on the exact candidate.
@@ -78,6 +79,8 @@
 
 ## HEPH-SHAPE-OPS-PROVIDER-1 — Device-neutral shape/indexing seam [minor] [arch] — todo
 - Priority: feature.
+- milestone: M-backend-parity. Exit check: its host and WGPU legs run in the M-compute-contracts host
+  and WGPU exits, its Metal leg in `HEPH-MACOS-METAL-CONFORMANCE-1`; none exercises CUDA/ROCm (next ladder revision).
 - Status: split one op at a time (per ADR 0062's precedent), not one
   `ShapeOps` seam. Delivered: `PadOps` (ADR 0062), `RollOps` (ADR 0069),
   `TriangularOps` (ADR 0070, tril/triu) — all host + wgpu.
@@ -105,6 +108,8 @@
 
 ## HEPH-TOPK-ARGMINMAX-PROVIDER-1 — CUDA/ROCm for topk/argmax/argmin [minor] — todo
 - Priority: feature.
+- milestone: M-backend-parity. Exit check: its Metal leg is `HEPH-MACOS-METAL-CONFORMANCE-1`; none
+  exercises its CUDA/ROCm outcome, which the next ladder revision decides.
 - Status: `ArgReduceOps` (argmax/argmin, ADR 0063) and `TopKOps` (topk, ADR
   0066) both delivered — host + wgpu, differential-tested including tie-break
   cases. Narrowed to the remaining backends and the `assert_backend_contract`
@@ -124,6 +129,8 @@
 
 ## HEPH-EMBEDDING-GATHER-PROVIDER-1 — Embedding-gather gradient (scatter-add) [minor] — todo
 - Priority: feature.
+- milestone: M-backend-parity. Exit check: its Metal leg is `HEPH-MACOS-METAL-CONFORMANCE-1`; none
+  exercises its CUDA/ROCm outcome, which the next ladder revision decides.
 - Status: `EmbeddingOps::scatter_add_into` delivered per ADR 0087 — host +
   wgpu (two-pass range-check + output-parallel accumulate), ascending
   position-order contract with an order-sensitive conformance fixture, plus
@@ -147,6 +154,8 @@
 
 ## HEPH-INTERPOLATION-PROVIDER-1 — CUDA/ROCm for interpolation [minor] — todo
 - Priority: feature.
+- milestone: M-backend-parity. Exit check: its Metal leg is `HEPH-MACOS-METAL-CONFORMANCE-1`; none
+  exercises its CUDA/ROCm outcome, which the next ladder revision decides.
 - Status: `InterpolationOps` (nearest/linear, ADR 0067) delivered — host +
   wgpu, align-corners convention, differential-tested including the
   `in_len == 1` and `out_len == 1` degenerate cases. Bilinear is not a
@@ -170,6 +179,8 @@
 
 ## HEPH-ADAPTIVE-POOLING-PROVIDER-1 — CUDA/ROCm for adaptive pooling [minor] — todo
 - Priority: feature.
+- milestone: M-backend-parity. Exit check: its Metal leg is `HEPH-MACOS-METAL-CONFORMANCE-1`; none
+  exercises its CUDA/ROCm outcome, which the next ladder revision decides.
 - Status: `AdaptivePoolingOps` (avg/max, ADR 0068) delivered — host + wgpu,
   differential-tested including the non-divisible-extent case (windows can
   overlap, matching the reference algorithm) and the `out_len == 1`/
@@ -192,6 +203,8 @@
 
 ## HEPH-DEVICE-DOT-CROSS-PROVIDER-1 — Device-resident cross product; coeus dot-binding gap [patch] — todo
 - Priority: feature.
+- milestone: M-backend-parity. Exit check: its Metal leg is `HEPH-MACOS-METAL-CONFORMANCE-1`; none
+  exercises its CUDA/ROCm outcome, which the next ladder revision decides.
 - Status: audited (ADR 0064). `DenseVectorOps::dot`/`norm_l2`/`norm_l1`/
   `norm_max` already dispatch entirely on-device on wgpu (only the reduced
   scalar downloads) — the reported "coeus copies full operands to host"
@@ -213,6 +226,7 @@
 
 ## HEPH-FUSED-EXPR-ROCM-METAL-1 — Fused-expression dispatch on ROCm [minor] [arch] — todo
 - Priority: feature.
+- milestone: M-backend-parity. Exit check: `HEPH-MACOS-METAL-CONFORMANCE-1` (Metal fusion contracts run in that lane).
 - Status: `RocmFusionOps` landed; the C-dialect generator, scalar
   vocabulary, layout record, and pipeline key are now owned once in
   `hephaestus_core::fusion` (ADR 0055 rev. 2026-10-20) with CUDA/HIP
@@ -231,6 +245,7 @@
 
 ## HEPH-ROCM-WINDOWS-HIP-RUNTIME-1 — Support the validated Windows HIP substrate [minor] — todo
 - Priority: feature.
+- milestone: M-backend-parity. No exit check fails without this item (the ladder has no ROCm exit); the next ladder revision decides.
 - Outcome: split the current Linux-only ROCm runtime boundary so the Windows
   HIP SDK path is enabled only after its runtime compiler, device discovery,
   buffer, stream, and convolution/attention contracts pass on supported AMD
@@ -246,6 +261,7 @@
 <a id="hephaestus-scan-leto-001"></a>
 
 ## HEPHAESTUS-SCAN-LETO-001 — Share the Leto scan clause across scalar types — review
+- milestone: M-compute-contracts.
 - Outcome: One scalar-generic long-line Leto differential validates every backend's scan path.
 - Scope: conformance clause, exports, composite caller, five backend scan tests and this item; no kernel changes.
 - Acceptance: Replace the type-specific helper with one generic clause, instantiate it for i32 and f32 on each backend, preserve signed inputs and exact Leto equality, and keep type_suffixed_fns at or below baseline.
@@ -259,6 +275,7 @@
 <a id="heph-lockfile-queue-latency"></a>
 
 ## HEPH-LOCKFILE-QUEUE-LATENCY: Bound hosted guard queue latency [patch] - todo
+- milestone: M-compute-contracts.
 - Outcome: the lockfile guard receives a hosted runner within its five-minute runtime target.
 - Scope: shared guard scheduling and duplicate trigger load; preserve the guard and current required verification.
 - Acceptance: record runner-assignment delay below five minutes on the next comparable PR/default-branch deliveries; exact locked guard still passes.
@@ -270,6 +287,7 @@
 
 ## HEPH-STAGGERED-3D-ROCM — ROCm kernels for the staggered pair [minor] — todo <a id="heph-staggered-3d-rocm"></a>
 
+- milestone: M-backend-parity. No exit check fails without this item (the ladder has no ROCm exit); the next ladder revision decides.
 - **Outcome:** `RocmStaggered3DOps` implementing `Staggered3DOps<RocmDevice>`,
   judged by the same conformance clauses the WGPU and CUDA backends pass.
 - **Consolidation requirement, not a copy:** the staggered kernel source is
@@ -334,6 +352,8 @@
 
 ## HEPH-FFT-PROVIDER-1 [minor] [arch] [perf] — in progress
 
+- milestone: M-compute-contracts. Exit check: its core planner and WGPU FFT tests run in the core and WGPU exits;
+  the Apollo and Kwavers cutover lies outside every exit.
 - Owner: Codex session `01a0253c-6013-7552-99cc-36bbbcf77f6d`; provider
   readback correction is on `perf/wgpu-readback-completion-pool` and consumer
   closure is in Apollo/Kwavers.
@@ -489,6 +509,7 @@
 
 ## HEPH-BOOK-REGROUND-1 [patch] [docs] — in progress
 
+- milestone: M-compute-contracts.
 - Owner: current Atlas session on `fix/hephaestus-book-reground-1`; the dirty
   primary checkout remains outside this scope.
 - Outcome: every `docs/book/` chapter describes the API this repository ships,
@@ -517,6 +538,7 @@
 
 ## HEPH-BOOK-TEST-2026-08-20 [patch] — in progress
 
+- milestone: M-compute-contracts.
 - PR #214 exposed a real mdBook 0.5.4 contract defect after the package build
   passed: the included HostDevice and capabilities examples lacked explicit
   extern crate declarations for their staged provider crates.
@@ -528,6 +550,8 @@
 
 ## HEPH-FDTD-PROVIDER-1 [minor] [arch] — in progress
 
+- milestone: M-compute-contracts. Exit check: its core contract and WGPU dispatch tests run in the core and WGPU
+  exits; the Kwavers cutover lies outside every exit.
 - Owner: Codex on `codex/hephaestus-fdtd-107`; scope: the device-neutral
   collocated 3D FDTD contract, WGPU implementation, provider value contract,
   and owner-keyed PM/ADR records. Kwavers consumer cutover is a dependent
@@ -548,6 +572,7 @@
 
 ## HEPH-MOIRAI-PACKAGE-1 [patch] — blocked
 
+- milestone: M-compute-contracts.
 - Owner: Codex `/root`; scope: root dependency package identities and registry
   versions, clean lockfile, focused WGPU resolution gate, and release records.
 - Acceptance: the `moirai` Rust import resolves package `moirai-runtime` from
@@ -559,6 +584,7 @@
 
 ## HEPH-STATEFUL-ZERO-LR-1 [patch] — in-progress
 
+- milestone: M-compute-contracts.
 - Owner: Codex on `codex/hephaestus-zero-learning-rate`; scope: stateful-update
   parameter validation, focused contracts, and release records.
 - Outcome: every stateful-update parameter contract accepts a finite zero
@@ -579,35 +605,10 @@
 Strategic roadmap; tags `[patch]`/`[minor]`/`[major]`/`[arch]` per SemVer class.
 Source decision: [Atlas ADR 0001](../../docs/adr/0001-gpu-accelerator-substrate.md).
 
-## HEPH-STATEFUL-UPDATE-1 [minor] [arch] — in-progress
-
-- Owner: Codex on `codex/hephaestus-stateful-update`; scope: ADR 0045,
-  provider-neutral stateful update vocabulary and validation, WGPU/CUDA/ROCm/
-  Metal implementations, shared conformance, and synchronized release records.
-- Outcome: expose one provider-owned, monomorphized stateful elementwise seam
-  capable of SGD, Adam, RMSProp, AdamW, and AdaGrad without consumer-authored
-  accelerator formulas or host execution.
-- Non-goals: Coeus consumer cutover, optimizer API compatibility shims,
-  reduced-precision admission, benchmark-instrument changes, or unmeasured
-  runtime and memory claims.
-- Acceptance: all five rules execute through one generic request/planner;
-  validation precedes mutation and rejects invalid shape/span/layout/alias/
-  hyperparameter contracts with typed errors; every backend instantiates the
-  shared Leto-differential suite; no provider silently executes on another
-  backend; warning-denied focused gates and exact-head provider CI pass.
-- Risk/change class: `[minor] [arch]`; additive public provider seam. Coeus's
-  later fallible cutover is a separate breaking consumer increment.
-- Status: done 2026-08-01. Core planner and all four provider dispatch
-  implementations pass warning-denied focused gates. Direct Leto differential
-  conformance passes on physical WGPU and CUDA devices; ROCm's adapterless
-  contract passes. Independent source review approves the provider ownership,
-  Metal substrate boundary, and pre-mutation validation. Implementation head
-  `fc0605c` passes WGPU `30713623614`, CUDA `30713623627`, ROCm `30713623615`,
-  and native macOS Metal `30713623612`; the docs-only closeout head must pass
-  the same matrix before merge. The Coeus consumer cutover is the next item.
-
 ## HEPH-ATTENTION-PROVIDER-1 [minor] [arch] — provider side complete; Coeus cutover open
 
+- milestone: M-backend-parity. Exit check: its host and WGPU legs run in the M-compute-contracts host
+  and WGPU exits, its Metal leg in `HEPH-MACOS-METAL-CONFORMANCE-1`; none exercises CUDA/ROCm or the Coeus cutover.
 - Composition note (2026-07-31, session-2026-07-30-board-ssot): commit
   `a23ee9b` on this lane bundles the attention frontier's uncommitted
   snapshot (56 files; it compiled and the cuda suite passed 142/142 at that
@@ -644,6 +645,8 @@ Source decision: [Atlas ADR 0001](../../docs/adr/0001-gpu-accelerator-substrate.
 
 ## HEPH-PARAMETERIZED-UNARY-1 [minor] [arch] — in-progress
 
+- milestone: M-backend-parity. Exit check: its host and WGPU legs run in the M-compute-contracts host
+  and WGPU exits, its Metal leg in `HEPH-MACOS-METAL-CONFORMANCE-1`; none exercises CUDA/ROCm or the Coeus cutover.
 - Owner: Codex on `codex/hephaestus-parameterized-unary`; scope:
   provider-owned runtime-parameter unary expressions, Hardtanh and Threshold
   forward/gradient implementations across WGPU, CUDA, ROCm, and Metal,
@@ -663,6 +666,8 @@ Source decision: [Atlas ADR 0001](../../docs/adr/0001-gpu-accelerator-substrate.
 
 ## HEPH-CONVOLUTION-PROVIDER-1 [minor] [arch] — in progress
 
+- milestone: M-backend-parity. Exit check: its host and WGPU legs run in the M-compute-contracts host
+  and WGPU exits, its Metal leg in `HEPH-MACOS-METAL-CONFORMANCE-1`; none exercises CUDA/ROCm (next ladder revision).
 - Owner: Codex on `codex/hephaestus-compute-seams`; claimed scope:
   `crates/hephaestus-core/src/domain/convolution/`,
   backend `application/convolution/` modules, focused provider contracts,
@@ -707,6 +712,7 @@ Source decision: [Atlas ADR 0001](../../docs/adr/0001-gpu-accelerator-substrate.
 
 ## HEPH-ROCM-SUBSTRATE-1 [arch] — in-review
 
+- milestone: M-backend-parity. No exit check fails without this item (the ladder has no ROCm exit); the next ladder revision decides.
 - Owner: Codex; scope: new `hephaestus-rocm` crate implementing the existing
   `ComputeDevice`, capability, and acquisition seams with HIP/ROCm device
   acquisition, typed device buffers, transfers, synchronization, topology,
@@ -734,6 +740,7 @@ Source decision: [Atlas ADR 0001](../../docs/adr/0001-gpu-accelerator-substrate.
 
 ## HEPH-PYTHON-RELEASE-1 [patch] — blocked
 
+- milestone: M-compute-contracts.
 - Owner: Codex `/root`; scope: the `hephaestus-python` release workflow,
   protected GitHub environment, distribution documentation, and PyPI trusted
   publisher. Python binding behavior and backend kernels are non-goals.
@@ -841,6 +848,7 @@ status ledger that stood here is program history; recover any entry with
 
 ## HEPH-WGSL-F64-TRANSCENDENTALS-1 — Width-valid f64 transcendentals on Vulkan [minor] — todo
 - Priority: feature.
+- milestone: M-compute-contracts. No exit check of the ladder fails without this item: the WGPU canary test asserts the f64 builtins are blocked on Vulkan (`crates/hephaestus-wgpu/tests/canary.rs:117-121`); whether it joins the ladder is for the next ladder revision.
 - Outcome: f64 `exp`/`log`/`pow`/`tanh` and the other GLSL.std.450
   precision-restricted builtins compute on Vulkan through WGSL routines built
   only from width-unrestricted f64 operations (add, multiply, `fma`,
@@ -856,6 +864,7 @@ status ledger that stood here is program history; recover any entry with
 <a id="heph-rocm-product-validation-1"></a>
 
 ## HEPH-ROCM-PRODUCT-VALIDATION-1 — Mirror CUDA product validation on ROCm [patch] — todo
+- milestone: M-compute-contracts.
 - Outcome: ROCm matrix and Kronecker products get the checked-address and
   empty-sum contracts #487 landed for CUDA.
 - Scope: `crates/hephaestus-rocm/src/application/linalg/` (`mod.rs`,
@@ -878,6 +887,7 @@ status ledger that stood here is program history; recover any entry with
 <a id="heph-roll-f64-gpu-1"></a>
 
 ## HEPH-ROLL-F64-GPU-1 — Run the n-D roll contract at f64 on CUDA/ROCm [patch] — todo
+- milestone: M-compute-contracts.
 - Outcome: the #483 n-D roll contract runs at f64 on CUDA and ROCm devices.
 - Scope: `crates/hephaestus-{cuda,rocm}/tests/roll_contracts.rs` (one line
   each).
@@ -893,6 +903,7 @@ status ledger that stood here is program history; recover any entry with
 <a id="heph-backend-contract-fold-1"></a>
 
 ## HEPH-BACKEND-CONTRACT-FOLD-1 — Fold all seams into assert_backend_contract [minor] — todo
+- milestone: M-compute-contracts.
 - Outcome: every device-neutral seam folds into the
   `assert_backend_contract` aggregate with per-backend instantiation.
 - Scope: `crates/hephaestus-conformance/src/assert_backend.rs`, five
@@ -913,6 +924,7 @@ status ledger that stood here is program history; recover any entry with
 <a id="heph-cuda-reduce-throughput-1"></a>
 
 ## HEPH-CUDA-REDUCE-THROUGHPUT-1 — Fix CUDA axis-reduction serial collapse [patch] — todo
+- milestone: M-compute-contracts.
 - Outcome: CUDA reductions run at memory-bandwidth pace.
 - Scope: `hephaestus-cuda` axis-reduction kernel + plan (the Coeus entry path),
   then the Coeus full-reduction seam. `coeus-cuda` delegates identically to

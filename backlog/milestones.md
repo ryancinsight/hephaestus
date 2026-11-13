@@ -1,4 +1,4 @@
-# Milestone ladder ([ADR 0020](../docs/adr/0020-release-scope-1-0.md))
+# Milestone ladder ([ADR 0088](../docs/adr/0088-release-scope-1-0.md))
 <a id="M-compute-contracts"></a> **M-compute-contracts** (0.29.0) needs: (none) — device contracts and core compute.
 - exit: pass core contract and host tests (`cargo test -p hephaestus-core --locked --all-features` and `cargo test -p hephaestus-host --locked --all-features` pass).
 - exit: run prepared map reduction example (`cargo run -p hephaestus-compute --example prepared_map_reduction --locked --features wgpu` exits successfully).
