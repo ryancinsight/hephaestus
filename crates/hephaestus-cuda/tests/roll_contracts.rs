@@ -16,4 +16,5 @@ fn cuda_satisfies_the_roll_contract() {
     };
     assert_roll_contract::<_, _, i32>(&device, &CudaRollOps);
     assert_roll_contract::<_, _, f32>(&device, &CudaRollOps);
+    assert_roll_contract::<_, _, f64>(&device, &CudaRollOps);
 }

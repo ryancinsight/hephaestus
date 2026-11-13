@@ -16,4 +16,5 @@ fn rocm_satisfies_the_roll_contract() {
     };
     assert_roll_contract::<_, _, i32>(&device, &RocmRollOps);
     assert_roll_contract::<_, _, f32>(&device, &RocmRollOps);
+    assert_roll_contract::<_, _, f64>(&device, &RocmRollOps);
 }
