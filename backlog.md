@@ -848,7 +848,7 @@ status ledger that stood here is program history; recover any entry with
 
 ## HEPH-WGSL-F64-TRANSCENDENTALS-1 — Width-valid f64 transcendentals on Vulkan [minor] — todo
 - Priority: feature.
-- milestone: M-compute-contracts. Exit check: canary grading in `cargo test -p hephaestus-wgpu --locked --all-features`.
+- milestone: M-compute-contracts. No exit check of the ladder fails without this item: the WGPU canary test asserts the f64 builtins are blocked on Vulkan (`crates/hephaestus-wgpu/tests/canary.rs:117-121`); whether it joins the ladder is for the next ladder revision.
 - Outcome: f64 `exp`/`log`/`pow`/`tanh` and the other GLSL.std.450
   precision-restricted builtins compute on Vulkan through WGSL routines built
   only from width-unrestricted f64 operations (add, multiply, `fma`,
@@ -903,7 +903,7 @@ status ledger that stood here is program history; recover any entry with
 <a id="heph-backend-contract-fold-1"></a>
 
 ## HEPH-BACKEND-CONTRACT-FOLD-1 — Fold all seams into assert_backend_contract [minor] — todo
-- milestone: M-backend-parity (needs `HEPH-EMBEDDING-GATHER-PROVIDER-1`, same milestone).
+- milestone: M-compute-contracts.
 - Outcome: every device-neutral seam folds into the
   `assert_backend_contract` aggregate with per-backend instantiation.
 - Scope: `crates/hephaestus-conformance/src/assert_backend.rs`, five
