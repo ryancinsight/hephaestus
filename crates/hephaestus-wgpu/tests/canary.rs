@@ -15,8 +15,8 @@ use hephaestus_core::{
 use hephaestus_wgpu::{
     BuiltinVerdict, CanaryWidth, ExpOp, MathBuiltin, PowOp, PrecisionGrade, SinOp, SoftplusOp,
     TanhOp, WgpuCrossEntropyOps, WgpuDevice, WgpuElementwiseOps, WgpuFullReductionOps,
-    binary_elementwise_into, builtin_verdict, probe_precision, require_builtin, scan_builtins,
-    unary_elementwise_into, unary_elementwise_strided_into,
+    binary_elementwise_into, builtin_verdict, probe_exp_routine, probe_precision, require_builtin,
+    scan_builtins, unary_elementwise_into, unary_elementwise_strided_into,
 };
 use leto::Layout;
 
@@ -129,6 +129,23 @@ fn vulkan_blocks_every_probed_transcendental_at_double_width() {
             BuiltinVerdict::Supported
         );
     }
+}
+
+#[test]
+fn width_valid_exp_routine_grades_exact_at_double_width_on_every_backend() {
+    let Some(device) = device() else { return };
+    if !supports_f64(&device) {
+        return;
+    }
+    let report = probe_exp_routine(&device).expect("the routine dispatches on a ShaderF64 device");
+    assert_eq!(report.builtin, MathBuiltin::Exp);
+    assert_eq!(report.width, CanaryWidth::F64);
+    assert_eq!(
+        report.grade(),
+        PrecisionGrade::Exact,
+        "routine worst relative error is {:e}",
+        report.max_relative_error
+    );
 }
 
 #[test]

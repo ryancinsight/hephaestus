@@ -51,7 +51,18 @@ Other backends and f32 stay supported; the live probe keeps measuring f64
 - Software f64 transcendentals built from f64 add, multiply, `fma`, `floor`,
   and `ldexp` (all width-unrestricted in GLSL.std.450): restores capability
   but is a numerical design of its own, with derived error bounds per
-  function; it is the follow-up that lifts these refusals.
+  function. Adopted per function, below; the refusals lift as each seam
+  composes its routine.
+
+## Width-valid routines
+
+Revision 2026-11-13 (HEPH-WGSL-F64-TRANSCENDENTALS-1, first slice): `exp` has
+a width-valid binary64 routine (derivation in `canary/probe/routine.rs`:
+reduction by `ln 2`, degree-13 Taylor polynomial, relative error at most
+`6 * 2^-53` for normal results), measured by `probe_exp_routine` and tested
+at the NaN, infinity, overflow, underflow and subnormal edges. No seam calls
+it, so native f64 `exp` stays blocked and no refusal lifts yet. `log`, `pow`,
+`tanh` and the unprobed restricted builtins have no routine.
 
 ## Consequences
 

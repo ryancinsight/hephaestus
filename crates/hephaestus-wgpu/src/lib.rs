@@ -27,7 +27,8 @@ pub use application::attention::WgpuAttentionOps;
 pub use application::axis_reduction_seam::WgpuAxisReductionOps;
 pub use application::canary::{
     BuiltinVerdict, CanaryWidth, MathBuiltin, PrecisionGrade, PrecisionReport, builtin_verdict,
-    probe_precision, require_builtin, require_expr_safe, scan_builtins, width_of,
+    probe_exp_routine, probe_precision, require_builtin, require_expr_safe, scan_builtins,
+    width_of,
 };
 pub use application::cat_seam::{WgpuCatOps, cat_into};
 pub use application::convolution::WgpuConvolutionOps;

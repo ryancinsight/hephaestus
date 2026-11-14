@@ -849,17 +849,16 @@ status ledger that stood here is program history; recover any entry with
 ## HEPH-WGSL-F64-TRANSCENDENTALS-1 — Width-valid f64 transcendentals on Vulkan [minor] — todo
 - Priority: feature.
 - milestone: M-compute-contracts. No exit check of the ladder fails without this item: the WGPU canary test asserts the f64 builtins are blocked on Vulkan (`crates/hephaestus-wgpu/tests/canary.rs:117-121`); whether it joins the ladder is for the next ladder revision.
-- Outcome: f64 `exp`/`log`/`pow`/`tanh` and the other GLSL.std.450
-  precision-restricted builtins compute on Vulkan through WGSL routines built
-  only from width-unrestricted f64 operations (add, multiply, `fma`,
-  `floor`, `ldexp`), lifting the ADR 0072 refusals op by op.
-- Scope: `crates/hephaestus-wgpu/src/application/canary.rs` and the WGSL
-  composition each gated seam uses; `docs/adr/0072-*`.
-- Acceptance: each routine documents its range reduction and a derived
-  relative-error bound; the canary probe grades it Exact (`<= 1e-12`) on
-  lavapipe and NVIDIA Vulkan, with special values (NaN, +-Inf, overflow and
-  underflow edges) asserted against CPU truth.
-- Needs: none. Next step: derive the `exp` reduction and its bound.
+- basis: d0ca2f69eda96f4adfc56f3ff846b3c29f5e8639.
+- Outcome: f64 `log`/`pow`/`tanh` and the other GLSL.std.450 precision-restricted
+  builtins compute on Vulkan through WGSL routines built only from
+  width-unrestricted f64 operations, and every gated seam composes the `exp`
+  routine, lifting the ADR 0072 refusals op by op.
+- Scope: `crates/hephaestus-wgpu/src/application/canary/`, the WGSL composition each gated seam uses; `docs/adr/0072-*`.
+- Delivered (PR #535): width-valid `exp` routine, `probe_exp_routine`, edge tests (ADR 0072).
+- Open design: a template-lowering helper replacing `require_template_safe` that rewrites `exp(` to the routine and prepends it; it lifts the `exp` verdict only once every gated seam uses it.
+- Acceptance: each routine documents its range reduction and a derived relative-error bound; the canary probe grades it Exact on lavapipe (hosted CI only) and NVIDIA Vulkan, with NaN, +-Inf, overflow and underflow edges asserted against CPU truth.
+- Needs: none. Next step: draft the lowering helper ADR (recommended: one rewrite pass at the template boundary), then the `log` routine.
 
 <a id="heph-rocm-product-validation-1"></a>
 

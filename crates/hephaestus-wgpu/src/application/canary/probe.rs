@@ -244,18 +244,46 @@ fn probe_with<T: ScalarProbe<Reference = f64>>(
     let groups = workgroups(PROBE_LEN, BlockWidth::DEFAULT)?;
     encode_elementwise(device, &pipeline, "hephaestus-canary", &entries, groups)?;
     let actual = device.download_owned(&output)?;
+    Ok(report(builtin, width, &actual))
+}
+
+/// Worst relative error of `actual` against CPU truth over the fixed probe
+/// inputs of `builtin`.
+fn report<T: ScalarProbe<Reference = f64>>(
+    builtin: MathBuiltin,
+    width: CanaryWidth,
+    actual: &[T],
+) -> PrecisionReport {
     let (reference_lhs, reference_rhs) = probe_inputs::<T::Reference>(builtin);
     let mut max_relative_error = 0.0_f64;
     for (index, gpu) in actual.iter().enumerate() {
         let expected = reference_value(builtin, reference_lhs[index], reference_rhs[index]);
         max_relative_error = max_relative_error.max(T::rel_err(*gpu, expected));
     }
-    Ok(PrecisionReport {
+    PrecisionReport {
         builtin,
         width,
         samples: u32::try_from(PROBE_LEN).expect("the fixed probe length fits a device word"),
         max_relative_error,
-    })
+    }
+}
+
+/// Measure the width-valid binary64 `exp` routine against CPU truth on the
+/// fixed `exp` probe inputs.
+///
+/// The routine uses only multiply, add, `fma`, `floor`, and `ldexp`, all
+/// defined at 64-bit operands, so it runs on every backend including Vulkan
+/// where the native f64 `exp` is blocked ([`builtin_verdict`]). Seams do not
+/// call it yet. The device needs the `ShaderF64` feature; without it pipeline
+/// creation fails with a typed validation error.
+///
+/// # Errors
+///
+/// Surfaces pipeline, dispatch, or transfer failures.
+pub fn probe_exp_routine(device: &WgpuDevice) -> Result<PrecisionReport> {
+    let (inputs, _) = probe_inputs::<f64>(MathBuiltin::Exp);
+    let actual = routine::evaluate(device, &inputs)?;
+    Ok(report(MathBuiltin::Exp, CanaryWidth::F64, &actual))
 }
 
 /// Measure one builtin's precision grade live against CPU truth.
@@ -284,6 +312,8 @@ pub fn probe_precision(
         CanaryWidth::F64 => probe_with::<f64>(device, builtin, width),
     }
 }
+
+mod routine;
 
 #[cfg(test)]
 mod tests;
