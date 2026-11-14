@@ -1,21 +1,25 @@
 //! Width-valid binary64 `exp` built only from operations that GLSL.std.450
 //! admits at 64-bit operands: multiply, add, `fma`, `floor`, and `ldexp`.
 //!
-//! Native `exp` has no defined binary64 result on Vulkan (ADR 0072); this is
-//! the replacement the ADR names. Seam adoption is a separate item.
+//! Native `exp` has no defined binary64 result on Vulkan (ADR 0072).
 //!
 //! # Assumptions
 //!
 //! WGSL and Vulkan guarantee less than the bound below needs: `fma` may
 //! expand to a rounded multiply and add, overflow, infinity and NaN may be
-//! assumed absent, and subnormals may be flushed (WGSL "Differences from
-//! IEEE-754"; Vulkan "Precision and Operation of SPIR-V Instructions", which
-//! asks double precision only to match single). The bound holds on an adapter
-//! with (1) binary64 add, multiply and `ldexp` correctly rounded to nearest,
-//! overflowing to infinity and underflowing gradually, and (2) NaN, infinity
-//! and subnormal operands preserved; `fma` may be fused or not. The probe and
-//! tests compare against CPU truth at sampled and edge inputs, where they
-//! expose flushing, finite-math or gross misrounding: the evidence for 1, 2.
+//! assumed absent, subnormals may be flushed, and operations may be
+//! reassociated (WGSL "Differences from IEEE-754", "Reassociation and
+//! Fusion"; Vulkan "Precision and Operation of SPIR-V Instructions",
+//! "Evaluation of Expressions", where only `NoContraction` prevents it and
+//! naga emits none); double precision need only match single. The bound holds
+//! on an adapter with (1) binary64 add, multiply and `ldexp` correctly
+//! rounded to nearest, overflowing to infinity and underflowing gradually,
+//! and `floor`, comparisons and `i32` of an integral value exact; (2) NaN,
+//! infinity and subnormal operands preserved; (3) operations evaluated as
+//! written, with no reassociation or folding of the reduction split (`x +
+//! (-k HI - k LO)` gives 508u in a CPU model); `fma` may be fused or not. No
+//! WGSL form is shown immune to rearrangement. The sweep test is the
+//! evidence for 1-3; the 8-input probe, `|k| <= 29`, is a smoke check.
 //!
 //! # Algorithm
 //!
@@ -28,15 +32,15 @@
 //!    0x1.a39ef35793c76p-33`, the nearest binary64 to `ln 2 - LN2_HI`.
 //!    `k LN2_HI` is an exact plain product for `|k| <= 2^21` (`32 + 21 = 53`
 //!    bits) and `x - k LN2_HI` is exact (Sterbenz: `x / (k LN2_HI)` lies in
-//!    `[1/2, 3/2]`), so fused or not only the last step rounds, by `u |r|`.
+//!    `[1/2, 2]`), so fused or not only the last step rounds, by `u |r|`.
 //!    The constants' miss of `ln 2` (`< 2^-86`, times `|k| <= 1076`) and,
 //!    unfused, the rounding of `k LN2_LO` add `< 2^-74`.
 //! 2. `exp(r)` is the degree-13 Taylor polynomial in Horner form. Its
 //!    truncation error relative to `e^r` is at most `0.06 u` (`u = 2^-53`).
-//! 3. The result is `ldexp(p, k/2) * ldexp(1, k - k/2)`. The first factor is
-//!    exact; the product is a single IEEE multiplication, so under
-//!    assumption 1 overflow, gradual underflow and the final rounding are
-//!    defined without `ldexp` outside its specified range.
+//! 3. The result is `ldexp(p, k/2) * ldexp(1, k - k/2)`: the first factor is
+//!    exact and the product is one IEEE multiplication, so under assumption 1
+//!    overflow, gradual underflow and rounding are defined without `ldexp`
+//!    outside its specified range.
 //!
 //! # Error bound
 //!
@@ -48,14 +52,14 @@
 //! and `e^a (1 + a)`, giving `2 (1 + ln 2) + 0.011 = 3.40 u` unfused and
 //! `2 + ln 2 + 0.011 = 2.70 u` fused. With truncation the totals are
 //! `3.81 u` and `3.11 u`; second-order terms are a relative `27 u`. Stated as
-//! `RELATIVE_ERROR_BOUND = 4 u` for normal results. A subnormal result
-//! carries one further rounding of half the subnormal spacing, `2^-1075`.
+//! `RELATIVE_ERROR_BOUND = 4 u` for normal results; a subnormal result adds
+//! half its spacing, `2^-1075`.
 //!
 //! # Special values
 //!
 //! Under assumptions 1 and 2, NaN returns NaN; `x > 710` returns `+Inf`
-//! (`exp(710) > DBL_MAX`); `x < -746` returns `+0` (`exp(-746) < 2^-1075`,
-//! which rounds to zero), so `+-Inf` fall in these cases; `x = +-0` gives `1`.
+//! (`exp(710) > DBL_MAX`); `x < -746` returns `+0` (`exp(-746) < 2^-1075`
+//! rounds to zero), so `+-Inf` fall in these cases; `+-0` gives `1`.
 
 use hephaestus_core::{BlockWidth, ComputeDevice, Result};
 
@@ -63,16 +67,14 @@ use crate::application::elementwise::encode_elementwise;
 use crate::application::pipeline::{try_cached_pipeline, workgroups};
 use crate::infrastructure::device::WgpuDevice;
 
-/// Upper bound on the relative error of a normal result: `4 u`, `u = 2^-53`
-/// (see the module derivation).
+/// Relative error bound `4 u`, `u = 2^-53`, of a normal result.
 #[cfg(test)]
 pub(super) const RELATIVE_ERROR_BOUND: f64 = 4.0 * (f64::EPSILON / 2.0);
 
 struct ExpRoutine;
 
-/// WGSL function `exp_routine(x: f64) -> f64`; `LN2_HI`/`LN2_LO` are
-/// `0x1.62e42fee00000p-1` and `0x1.a39ef35793c76p-33`, the Taylor
-/// coefficients are `1/j!` rounded to nearest.
+/// WGSL `exp_routine(x: f64) -> f64`; the Taylor coefficients are `1/j!`
+/// rounded to nearest.
 const ROUTINE: &str = "
 fn exp_routine(x: f64) -> f64 {
     if (x != x) { return x; }

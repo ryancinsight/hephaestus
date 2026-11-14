@@ -273,12 +273,12 @@ fn report<T: ScalarProbe<Reference = f64>>(
 ///
 /// The routine uses only multiply, add, `fma`, `floor`, and `ldexp`, all
 /// defined at 64-bit operands, where the native f64 `exp` is blocked on
-/// Vulkan ([`builtin_verdict`]). Its error bound assumes correctly rounded
-/// binary64 arithmetic with preserved subnormals, infinities and NaN, which
-/// the specifications do not guarantee; this measurement is the evidence for
-/// the adapter behind `device`. Seams do not call it yet. The device needs the
-/// `ShaderF64` feature; without it pipeline creation fails with a typed
-/// validation error.
+/// Vulkan ([`builtin_verdict`]). Its bound assumes correctly rounded binary64
+/// arithmetic, preserved subnormals, infinities and NaN, and operations
+/// evaluated as written (the specifications allow reassociation). These 8
+/// inputs reach only `|k| <= 29`: a smoke check, the sweep test is the
+/// evidence. The device needs `ShaderF64`; without it pipeline creation fails
+/// with a typed error.
 ///
 /// # Errors
 ///

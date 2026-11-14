@@ -8,7 +8,7 @@ use crate::infrastructure::device::WgpuDevice;
 
 /// Allowance `2^-52 = 2u` for the relative error of the CPU `exp` truth. std
 /// leaves `f64::exp` precision unspecified, so this is a measurement, not a
-/// contract: 1.02u at worst (0.75 subnormal spacings) on x86_64-pc-windows-msvc,
+/// contract: 1.03u sample maximum (0.75 subnormal spacings) on x86_64-pc-windows-msvc,
 /// rustc 1.97.0, over these inputs and 2e5 uniform points in [-745, 709]
 /// against 200-bit arithmetic. A libm worse than `2u` fails as a bad reference.
 const REFERENCE_BOUND: f64 = f64::EPSILON;
@@ -87,10 +87,9 @@ fn routine_matches_cpu_truth_over_the_range_and_at_the_edges() {
         return;
     };
     let arrange = tracing::info_span!("arrange").entered();
-    // Uniform grid over [-745, 709.5] whose step is not a power of two, so
-    // consecutive points land on varied reduced arguments, a dense grid over
-    // [-1, 1] where the reduction index is 0 or +-1, and the NaN, infinity,
-    // overflow, underflow and subnormal edges.
+    // A grid over [-745, 709.5] with a non-power-of-two step (varied reduced
+    // arguments), a dense grid over [-1, 1] (reduction index 0 or +-1), and
+    // the NaN, infinity, overflow, underflow and subnormal edges.
     let wide = (0..=6144_u32).map(|index| -745.0 + f64::from(index) * (1454.5 / 6144.0));
     let near = (0..=2048_u32).map(|index| -1.0 + f64::from(index) * (2.0 / 2048.0));
     let edges = [
