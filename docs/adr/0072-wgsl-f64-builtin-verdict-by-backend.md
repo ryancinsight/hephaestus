@@ -58,11 +58,11 @@ Other backends and f32 stay supported; the live probe keeps measuring f64
 
 Revision 2026-11-13 (PR #536): `exp` has a width-valid binary64 routine
 (`canary/probe/routine.rs`), relative error at most `4 * 2^-53` for normal
-results with a fused or unfused `fma`. The bound assumes correctly rounded
-binary64 add, multiply and `ldexp` with preserved subnormals, infinities and
-NaN, which WGSL and Vulkan do not guarantee; `probe_exp_routine` and the edge
-tests are the per-adapter evidence. No seam calls it, so native f64 `exp`
-stays blocked; the other restricted builtins have no routine.
+results. WGSL and Vulkan do not guarantee its assumptions: correctly rounded
+binary64 add, multiply, `ldexp` and `floor`; preserved subnormals, infinities
+and NaN; operations evaluated as written (both allow reassociation; naga
+emits no `NoContraction`). The sweep test is the per-adapter evidence. No
+seam calls it, so native f64 `exp` stays blocked.
 
 ## Consequences
 
