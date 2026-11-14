@@ -51,7 +51,18 @@ Other backends and f32 stay supported; the live probe keeps measuring f64
 - Software f64 transcendentals built from f64 add, multiply, `fma`, `floor`,
   and `ldexp` (all width-unrestricted in GLSL.std.450): restores capability
   but is a numerical design of its own, with derived error bounds per
-  function; it is the follow-up that lifts these refusals.
+  function. Adopted per function, below; the refusals lift as each seam
+  composes its routine.
+
+## Width-valid routines
+
+Revision 2026-11-13 (PR #536): `exp` has a width-valid binary64 routine
+(`canary/probe/routine.rs`), relative error at most `4 * 2^-53` for normal
+results. WGSL and Vulkan do not guarantee its assumptions: correctly rounded
+binary64 add, multiply, `ldexp` and `floor`; preserved subnormals, infinities
+and NaN; operations evaluated as written (both allow reassociation; naga
+emits no `NoContraction`). The sweep test is the per-adapter evidence. No
+seam calls it, so native f64 `exp` stays blocked.
 
 ## Consequences
 
