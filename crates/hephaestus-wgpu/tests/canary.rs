@@ -132,7 +132,7 @@ fn vulkan_blocks_every_probed_transcendental_at_double_width() {
 }
 
 #[test]
-fn width_valid_exp_routine_grades_exact_at_double_width_on_every_backend() {
+fn width_valid_exp_routine_grades_exact_at_double_width_on_this_adapter() {
     let Some(device) = device() else { return };
     if !supports_f64(&device) {
         return;

@@ -4,40 +4,58 @@
 //! Native `exp` has no defined binary64 result on Vulkan (ADR 0072); this is
 //! the replacement the ADR names. Seam adoption is a separate item.
 //!
+//! # Assumptions
+//!
+//! WGSL and Vulkan guarantee less than the bound below needs: `fma` may
+//! expand to a rounded multiply and add, overflow, infinity and NaN may be
+//! assumed absent, and subnormals may be flushed (WGSL "Differences from
+//! IEEE-754"; Vulkan "Precision and Operation of SPIR-V Instructions", which
+//! asks double precision only to match single). The bound holds on an adapter
+//! with (1) binary64 add, multiply and `ldexp` correctly rounded to nearest,
+//! overflowing to infinity and underflowing gradually, and (2) NaN, infinity
+//! and subnormal operands preserved; `fma` may be fused or not. The probe and
+//! tests compare against CPU truth at sampled and edge inputs, where they
+//! expose flushing, finite-math or gross misrounding: the evidence for 1, 2.
+//!
 //! # Algorithm
 //!
 //! With `k = floor(x log2(e) + 1/2)` and `r = x - k ln 2`, `exp(x) = 2^k
-//! exp(r)` and `|r| <= ln(2)/2 + delta`, where `delta < 2^-42` is the
-//! rounding of `x log2(e)` at `|x| <= 746`. Then:
+//! exp(r)`. The roundings in `x log2(e) + 1/2`, `log2(e)` included, move it
+//! by less than `2^-41`, so `|r| <= a = ln(2)/2 + 2^-41` for `|x| <= 746`. Then:
 //!
-//! 1. `r` is formed by two fused steps, `fma(-k, LN2_LO, fma(-k, LN2_HI, x))`,
-//!    with `LN2_HI` the nearest binary64 to `ln 2` and `LN2_LO` the nearest to
-//!    `ln 2 - LN2_HI`. Each `fma` rounds once; the constant error
-//!    `k |ln 2 - LN2_HI - LN2_LO| < 2^-98` is negligible.
-//! 2. `exp(r)` is the degree-13 Taylor polynomial in Horner form with fused
-//!    steps. Its truncation error is `|r|^14 e^|r| / 14! < 5.9e-18 = 0.06 u`
-//!    (`u = 2^-53`).
+//! 1. `r = fma(-k, LN2_LO, fma(-k, LN2_HI, x))` with `LN2_HI =
+//!    0x1.62e42fee00000p-1` (32 significant bits) and `LN2_LO =
+//!    0x1.a39ef35793c76p-33`, the nearest binary64 to `ln 2 - LN2_HI`.
+//!    `k LN2_HI` is an exact plain product for `|k| <= 2^21` (`32 + 21 = 53`
+//!    bits) and `x - k LN2_HI` is exact (Sterbenz: `x / (k LN2_HI)` lies in
+//!    `[1/2, 3/2]`), so fused or not only the last step rounds, by `u |r|`.
+//!    The constants' miss of `ln 2` (`< 2^-86`, times `|k| <= 1076`) and,
+//!    unfused, the rounding of `k LN2_LO` add `< 2^-74`.
+//! 2. `exp(r)` is the degree-13 Taylor polynomial in Horner form. Its
+//!    truncation error relative to `e^r` is at most `0.06 u` (`u = 2^-53`).
 //! 3. The result is `ldexp(p, k/2) * ldexp(1, k - k/2)`. The first factor is
-//!    exact; the product is a single IEEE multiplication, so overflow,
-//!    gradual underflow and the final rounding are defined without relying on
-//!    `ldexp` outside its specified range.
+//!    exact; the product is a single IEEE multiplication, so under
+//!    assumption 1 overflow, gradual underflow and the final rounding are
+//!    defined without `ldexp` outside its specified range.
 //!
 //! # Error bound
 //!
-//! Each of the 13 fused Horner steps and each of the 12 coefficient roundings
-//! contributes at most `u` of its partial value (`<= e^0.3466 = 1.414`)
-//! weighted by `|r|^j`; the weights sum to `<= 1/(1 - 0.3466) = 1.53`, so
-//! the polynomial adds `<= 2 * 1.414 * 1.53 u = 4.33 u`. The two reduction
-//! steps add `<= 2 * 0.3466 u = 0.7 u` and truncation `0.06 u`. The total is
-//! `5.1 u`, stated as [`RELATIVE_ERROR_BOUND`] `= 6 u` for normal results. A
-//! subnormal result carries one further rounding of half the subnormal
-//! spacing, `2^-1075`.
+//! Relative to `e^r`, worst at `r = -a` where `e^-a = 1/sqrt 2`. Reduction:
+//! `u |r| + 2^-74 <= 0.35 u`. Polynomial: the coefficient of `r^m` carries
+//! `2m + 1` roundings unfused (`m + 1` fused), so to first order the error
+//! is `u sum_m (2m + 1) |r|^m / m!` (fused `(m + 1)`), plus `u (e^a - 1 - a -
+//! a^2/2)` for the rounded coefficients `m >= 3`. The sums are `e^a (1 + 2a)`
+//! and `e^a (1 + a)`, giving `2 (1 + ln 2) + 0.011 = 3.40 u` unfused and
+//! `2 + ln 2 + 0.011 = 2.70 u` fused. With truncation the totals are
+//! `3.81 u` and `3.11 u`; second-order terms are a relative `27 u`. Stated as
+//! `RELATIVE_ERROR_BOUND = 4 u` for normal results. A subnormal result
+//! carries one further rounding of half the subnormal spacing, `2^-1075`.
 //!
 //! # Special values
 //!
-//! NaN returns NaN; `x > 710` returns `+Inf` (`exp(710) > DBL_MAX`); `x < -746`
-//! returns `+0` (`exp(-746) < 2^-1075`, which rounds to zero), so `+-Inf` fall
-//! in these cases; `x = +-0` gives `1`.
+//! Under assumptions 1 and 2, NaN returns NaN; `x > 710` returns `+Inf`
+//! (`exp(710) > DBL_MAX`); `x < -746` returns `+0` (`exp(-746) < 2^-1075`,
+//! which rounds to zero), so `+-Inf` fall in these cases; `x = +-0` gives `1`.
 
 use hephaestus_core::{BlockWidth, ComputeDevice, Result};
 
@@ -45,15 +63,15 @@ use crate::application::elementwise::encode_elementwise;
 use crate::application::pipeline::{try_cached_pipeline, workgroups};
 use crate::infrastructure::device::WgpuDevice;
 
-/// Upper bound on the relative error of a normal result: `6 u`, `u = 2^-53`
+/// Upper bound on the relative error of a normal result: `4 u`, `u = 2^-53`
 /// (see the module derivation).
 #[cfg(test)]
-pub(super) const RELATIVE_ERROR_BOUND: f64 = 6.0 * (f64::EPSILON / 2.0);
+pub(super) const RELATIVE_ERROR_BOUND: f64 = 4.0 * (f64::EPSILON / 2.0);
 
 struct ExpRoutine;
 
 /// WGSL function `exp_routine(x: f64) -> f64`; `LN2_HI`/`LN2_LO` are
-/// `0x1.62e42fefa39efp-1` and `0x1.abc9e3b39803fp-56`, the Taylor
+/// `0x1.62e42fee00000p-1` and `0x1.a39ef35793c76p-33`, the Taylor
 /// coefficients are `1/j!` rounded to nearest.
 const ROUTINE: &str = "
 fn exp_routine(x: f64) -> f64 {
@@ -61,7 +79,7 @@ fn exp_routine(x: f64) -> f64 {
     if (x > 710.0) { return x * 1.0e308; }
     if (x < -746.0) { return 0.0; }
     let k = floor(fma(x, 1.4426950408889634, 0.5));
-    let r = fma(-k, 2.3190468138462996e-17, fma(-k, 0.6931471805599453, x));
+    let r = fma(-k, 1.9082149292705877e-10, fma(-k, 0.6931471803691238, x));
     var p = f64(1.6059043836821613e-10);
     p = fma(p, r, 2.08767569878681e-09);
     p = fma(p, r, 2.505210838544172e-08);

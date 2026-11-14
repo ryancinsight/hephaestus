@@ -6,8 +6,11 @@ use super::{RELATIVE_ERROR_BOUND, evaluate};
 use crate::application::canary::{PrecisionGrade, probe_exp_routine};
 use crate::infrastructure::device::WgpuDevice;
 
-/// Relative error contract of the CPU `exp` truth: one binary64 spacing,
-/// `2^-52 = 2u`.
+/// Allowance `2^-52 = 2u` for the relative error of the CPU `exp` truth. std
+/// leaves `f64::exp` precision unspecified, so this is a measurement, not a
+/// contract: 1.02u at worst (0.75 subnormal spacings) on x86_64-pc-windows-msvc,
+/// rustc 1.97.0, over these inputs and 2e5 uniform points in [-745, 709]
+/// against 200-bit arithmetic. A libm worse than `2u` fails as a bad reference.
 const REFERENCE_BOUND: f64 = f64::EPSILON;
 
 /// Spacing of the subnormal range, `2^-1074`.
@@ -77,7 +80,7 @@ fn assert_matches_cpu(input: f64, got: f64) {
 }
 
 #[test]
-fn routine_matches_cpu_truth_over_the_representable_range() {
+fn routine_matches_cpu_truth_over_the_range_and_at_the_edges() {
     let subscriber = tracing_subscriber::fmt().with_test_writer().finish();
     let _subscriber = tracing::subscriber::set_default(subscriber);
     let Some(device) = device_or_skip() else {
@@ -85,36 +88,12 @@ fn routine_matches_cpu_truth_over_the_representable_range() {
     };
     let arrange = tracing::info_span!("arrange").entered();
     // Uniform grid over [-745, 709.5] whose step is not a power of two, so
-    // consecutive points land on varied reduced arguments, plus a dense grid
-    // over [-1, 1] where the reduction index is 0 or +-1.
-    let wide: Vec<f64> = (0..=6144_u32)
-        .map(|index| -745.0 + f64::from(index) * (1454.5 / 6144.0))
-        .collect();
-    let near: Vec<f64> = (0..=2048_u32)
-        .map(|index| -1.0 + f64::from(index) * (2.0 / 2048.0))
-        .collect();
-    let inputs: Vec<f64> = wide.into_iter().chain(near).collect();
-    drop(arrange);
-    let outputs = {
-        let _act = tracing::info_span!("act").entered();
-        evaluate(&device, &inputs).expect("the routine dispatches on a ShaderF64 device")
-    };
-    let _assert = tracing::info_span!("assert").entered();
-    assert_eq!(outputs.len(), inputs.len());
-    for (input, got) in inputs.into_iter().zip(outputs) {
-        assert_matches_cpu(input, got);
-    }
-}
-
-#[test]
-fn routine_special_values_match_cpu_truth() {
-    let subscriber = tracing_subscriber::fmt().with_test_writer().finish();
-    let _subscriber = tracing::subscriber::set_default(subscriber);
-    let Some(device) = device_or_skip() else {
-        return;
-    };
-    let arrange = tracing::info_span!("arrange").entered();
-    let inputs = [
+    // consecutive points land on varied reduced arguments, a dense grid over
+    // [-1, 1] where the reduction index is 0 or +-1, and the NaN, infinity,
+    // overflow, underflow and subnormal edges.
+    let wide = (0..=6144_u32).map(|index| -745.0 + f64::from(index) * (1454.5 / 6144.0));
+    let near = (0..=2048_u32).map(|index| -1.0 + f64::from(index) * (2.0 / 2048.0));
+    let edges = [
         f64::NAN,
         f64::INFINITY,
         f64::NEG_INFINITY,
@@ -135,12 +114,14 @@ fn routine_special_values_match_cpu_truth() {
         -1000.0,
         -1.0e300,
     ];
+    let inputs: Vec<f64> = wide.chain(near).chain(edges).collect();
     drop(arrange);
     let outputs = {
         let _act = tracing::info_span!("act").entered();
         evaluate(&device, &inputs).expect("the routine dispatches on a ShaderF64 device")
     };
     let _assert = tracing::info_span!("assert").entered();
+    assert_eq!(outputs.len(), inputs.len());
     for (input, got) in inputs.into_iter().zip(outputs) {
         assert_matches_cpu(input, got);
     }

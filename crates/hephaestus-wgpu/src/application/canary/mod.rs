@@ -12,7 +12,7 @@
 //! Mesa lavapipe (hosted CI) f64 `exp` reaches a worst relative error of 1. The
 //! defect is the lowering, not an adapter, so the verdict is keyed by
 //! backend and width rather than by adapter identity. Two mechanisms share
-//! one query surface, and one routine replaces a blocked builtin:
+//! one query surface:
 //!
 //! - [`builtin_verdict`](crate::application::canary::builtin_verdict): the
 //!   specification rule. f64 transcendentals on Vulkan report
@@ -25,7 +25,7 @@
 //!   can never compile undefined SPIR-V or abort the process.
 //! - [`probe_exp_routine`](crate::application::canary::probe_exp_routine): the
 //!   same measurement for the width-valid f64 `exp` routine, which avoids the
-//!   restricted instruction and so runs on Vulkan; seams do not call it yet.
+//!   restricted instruction; seams do not call it yet.
 //!
 //! Seams gate dispatch with [`require_expr_safe`](crate::application::canary::require_expr_safe)
 //! (which scans the WGSL text for builtin calls, so composite expressions

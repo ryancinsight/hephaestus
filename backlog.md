@@ -855,7 +855,6 @@ status ledger that stood here is program history; recover any entry with
   width-unrestricted f64 operations, and every gated seam composes the `exp`
   routine, lifting the ADR 0072 refusals op by op.
 - Scope: `crates/hephaestus-wgpu/src/application/canary/`, the WGSL composition each gated seam uses; `docs/adr/0072-*`.
-- Delivered (PR #535): width-valid `exp` routine, `probe_exp_routine`, edge tests (ADR 0072).
 - Open design: a template-lowering helper replacing `require_template_safe` that rewrites `exp(` to the routine and prepends it; it lifts the `exp` verdict only once every gated seam uses it.
 - Acceptance: each routine documents its range reduction and a derived relative-error bound; the canary probe grades it Exact on lavapipe (hosted CI only) and NVIDIA Vulkan, with NaN, +-Inf, overflow and underflow edges asserted against CPU truth.
 - Needs: none. Next step: draft the lowering helper ADR (recommended: one rewrite pass at the template boundary), then the `log` routine.

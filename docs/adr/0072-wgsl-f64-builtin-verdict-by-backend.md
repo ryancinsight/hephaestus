@@ -56,13 +56,13 @@ Other backends and f32 stay supported; the live probe keeps measuring f64
 
 ## Width-valid routines
 
-Revision 2026-11-13 (HEPH-WGSL-F64-TRANSCENDENTALS-1, first slice): `exp` has
-a width-valid binary64 routine (derivation in `canary/probe/routine.rs`:
-reduction by `ln 2`, degree-13 Taylor polynomial, relative error at most
-`6 * 2^-53` for normal results), measured by `probe_exp_routine` and tested
-at the NaN, infinity, overflow, underflow and subnormal edges. No seam calls
-it, so native f64 `exp` stays blocked and no refusal lifts yet. `log`, `pow`,
-`tanh` and the unprobed restricted builtins have no routine.
+Revision 2026-11-13 (PR #536): `exp` has a width-valid binary64 routine
+(`canary/probe/routine.rs`), relative error at most `4 * 2^-53` for normal
+results with a fused or unfused `fma`. The bound assumes correctly rounded
+binary64 add, multiply and `ldexp` with preserved subnormals, infinities and
+NaN, which WGSL and Vulkan do not guarantee; `probe_exp_routine` and the edge
+tests are the per-adapter evidence. No seam calls it, so native f64 `exp`
+stays blocked; the other restricted builtins have no routine.
 
 ## Consequences
 
