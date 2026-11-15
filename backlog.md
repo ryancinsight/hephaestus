@@ -863,24 +863,25 @@ status ledger that stood here is program history; recover any entry with
 
 ## HEPH-ROCM-PRODUCT-VALIDATION-1 — Mirror CUDA product validation on ROCm [patch] — todo
 - milestone: M-compute-contracts.
-- Outcome: ROCm matrix and Kronecker products get the checked-address and
-  empty-sum contracts #487 landed for CUDA.
-- Scope: `crates/hephaestus-rocm/src/application/linalg/` (`mod.rs`,
-  `kron.rs`, `matmul/{single,batched}.rs`),
-  `tests/dense_product_contracts.rs`.
-- Evidence: #487 landed CUDA-only because the #427 rescue has no ROCm
-  equivalent to port.
-- Acceptance: `validate_signed_address_range` + the 9-case oracle ported;
-  kron/single call sites wired (verify the HIP batched kernel widens to
-  `long long` before excluding it); k=0 dispatches-and-zeroes (verify
-  zero-tile behavior of the HIP kernel first); empty-product device
-  matrix mirrored. No ROCm hardware locally or in CI: land behind the
-  existing compile gates + adapterless legs; do not land blind device
-  claims.
+- Outcome: ROCm matrix and Kronecker products get the empty-sum contract #487
+  landed for CUDA. The checked-address contract is delivered: single `matmul`
+  and `kron` reject layouts whose maximum address exceeds `i32::MAX`
+  (`validate_signed_address_range`, 9-case host oracle); the HIP batched
+  kernel widens every address term to `long long` and stays unbounded.
+- Scope: `crates/hephaestus-rocm/src/application/linalg/{matmul,batched_matmul}.rs`,
+  `crates/hephaestus-rocm/tests/dense_product_contracts.rs`.
+- Evidence: the HIP `matmul_kernel` skips its tile loop when `k == 0` and
+  writes `sum = 0` (read from source, not executed); `matmul_into` still
+  returns before dispatch on `lhs_shared == 0`, leaving the output unwritten.
+- Acceptance: `k == 0` dispatches and zeroes the output without reading
+  either operand; the empty-product device matrix of #487 is mirrored over
+  the admitted scalars, strided padded outputs, batched form and both
+  allocating forms. Needs a ROCm device to execute: land the device
+  assertions only with a run on one; do not land blind device claims.
 - Dependencies: none. Priority P1; risk: device addressing correctness.
-- Verification: focused metadata/codegen and adapterless product tests,
-  strict affected Clippy, docs and independent review.
-- Last-update: 2026-10-14.
+- Verification: required-device empty-product matrix, strict affected
+  Clippy, docs and independent review.
+- Last-update: 2026-11-15.
 
 <a id="heph-roll-f64-gpu-1"></a>
 
