@@ -85,8 +85,10 @@ extern "C" __global__ void {entry}(
     bool reverse = (meta.offsets[2] & 2u) != 0u;
     unsigned int len = (axis == 0u) ? rows : cols;
     unsigned int chunk_len = {chunk_len};
-    // `start <= len + {wg}u - 1u - chunk_len` cannot wrap; bounding by the
-    // remaining length keeps `end <= len` where `start + chunk_len` wraps.
+    // `start = lane * chunk_len` is at most `len` when `chunk_len >= {wg}u - 1u`
+    // and below `{wg}u * {wg}u` otherwise, so it cannot wrap for widths up to
+    // 65536. Bounding by the remaining length keeps `end <= len` where
+    // `start + chunk_len` wraps.
     unsigned int start = lane * chunk_len;
     unsigned int end = start + min(chunk_len, len - min(start, len));
     {ty} local_acc = {identity};
