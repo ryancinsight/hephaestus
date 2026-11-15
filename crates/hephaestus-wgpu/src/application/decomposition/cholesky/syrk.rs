@@ -2,7 +2,7 @@
 
 use std::any::TypeId;
 
-use hephaestus_core::{HephaestusError, Result};
+use hephaestus_core::{HephaestusError, Result, ceiling_quotient_source};
 use leto::Layout;
 
 use crate::application::pipeline::cached_pipeline;
@@ -86,7 +86,7 @@ fn main(
     let off        = syrk_meta.offset;
 
     var sum = {ty}({zero});
-    let num_tiles = (k + 15u) / 16u;
+    let num_tiles = {tiles};
 
     for (var tile: u32 = 0u; tile < num_tiles; tile = tile + 1u) {{
         // Load `panel[row, tile*16 + local_col]` into shared memory.
@@ -123,6 +123,7 @@ fn main(
 }}
 "#,
         ty = TY,
+        tiles = ceiling_quotient_source("k", "16u"),
         zero = ZERO,
     )
 }
@@ -238,4 +239,11 @@ pub(crate) fn syrk_trailing_update(
     }
 
     Ok(())
+}
+
+#[cfg(test)]
+#[test]
+fn tile_count_is_exact_at_u32_boundaries() {
+    let source = syrk_shader_source();
+    crate::application::index_arithmetic::assert_tile_count_is_exact(&source, "let num_tiles", "k");
 }

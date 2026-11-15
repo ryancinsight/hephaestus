@@ -10,7 +10,8 @@ fn c_family_source_declares_the_tiled_shared_memory_contract() {
     assert!(source.contains("extern __shared__ float partial[];"));
     assert!(source.contains("unsigned int line = blockIdx.x;"));
     assert!(source.contains("__syncthreads();"));
-    assert!(source.contains("unsigned int chunk_len = (len + 8u - 1u) / 8u;"));
+    assert!(source.contains("unsigned int chunk_len = ((len) / (8u) + min((len) % (8u), 1u));"));
+    assert!(source.contains("unsigned int end = start + min(chunk_len, len - min(start, len));"));
     assert!(source.contains("void scan_kernel("));
 }
 
@@ -57,6 +58,6 @@ fn width_specializes_the_emitted_chunking() {
     let wide = c_family_axis_scan_source::<CudaC, CumSumOp, f32>(
         BlockWidth::new(256).expect("non-zero test width"),
     );
-    assert!(narrow.contains("(len + 16u - 1u) / 16u"));
-    assert!(wide.contains("(len + 256u - 1u) / 256u"));
+    assert!(narrow.contains("((len) / (16u) + min((len) % (16u), 1u))"));
+    assert!(wide.contains("((len) / (256u) + min((len) % (256u), 1u))"));
 }

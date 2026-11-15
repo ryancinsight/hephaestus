@@ -259,6 +259,7 @@ pub(crate) mod gemm_impl {
     use super::*;
     use crate::application::linalg::to_u32;
     use crate::application::pipeline::{LaunchConfig, PipelineKey, cached_kernel, launch_kernel};
+    use hephaestus_core::ceiling_quotient_source;
 
     #[repr(C)]
     #[derive(Clone, Copy, eunomia::Pod, eunomia::Zeroable)]
@@ -272,19 +273,20 @@ pub(crate) mod gemm_impl {
     }
 
     fn gemm_shader_source() -> String {
-        r#"
-    struct GemmMeta {
+        format!(
+            r#"
+    struct GemmMeta {{
         unsigned int shape[3];
         unsigned int strides[3];
         unsigned int offsets[3];
-    };
+    }};
 
     extern "C" __global__ void gemm_kernel(
         const float* a_buf,
         const float* b_buf,
         float* c_buf,
         GemmMeta meta
-    ) {
+    ) {{
         __shared__ float tile_a[16][16];
         __shared__ float tile_b[16][16];
 
@@ -301,44 +303,57 @@ pub(crate) mod gemm_impl {
         unsigned int b_off = meta.offsets[2];
 
         float sum = 0.0f;
-        unsigned int num_tiles = (k + 15u) / 16u;
+        unsigned int num_tiles = {tiles};
 
-        for (unsigned int tile = 0u; tile < num_tiles; tile++) {
+        for (unsigned int tile = 0u; tile < num_tiles; tile++) {{
             // Load tile of A: A[row, tile*16 + threadIdx.x]
             unsigned int a_col = tile * 16u + threadIdx.x;
-            if (row < m && a_col < k) {
+            if (row < m && a_col < k) {{
                 tile_a[threadIdx.y][threadIdx.x] = a_buf[a_off + row * a_stride + a_col];
-            } else {
+            }} else {{
                 tile_a[threadIdx.y][threadIdx.x] = 0.0f;
-            }
+            }}
 
             // Load tile of B: B[tile*16 + threadIdx.y, col]
             unsigned int b_row = tile * 16u + threadIdx.y;
-            if (b_row < k && col < n) {
+            if (b_row < k && col < n) {{
                 tile_b[threadIdx.y][threadIdx.x] = b_buf[b_off + b_row * b_stride + col];
-            } else {
+            }} else {{
                 tile_b[threadIdx.y][threadIdx.x] = 0.0f;
-            }
+            }}
 
             __syncthreads();
 
-            if (row < m && col < n) {
-                for (unsigned int i = 0u; i < 16u; i++) {
+            if (row < m && col < n) {{
+                for (unsigned int i = 0u; i < 16u; i++) {{
                     sum += tile_a[threadIdx.y][i] * tile_b[i][threadIdx.x];
-                }
-            }
+                }}
+            }}
 
             __syncthreads();
-        }
+        }}
 
         // C -= A * B
-        if (row < m && col < n) {
+        if (row < m && col < n) {{
             unsigned int c_idx = c_off + row * c_stride + col;
             c_buf[c_idx] -= sum;
-        }
+        }}
+    }}
+        "#,
+            tiles = ceiling_quotient_source("k", "16u"),
+        )
     }
-        "#
-        .to_string()
+
+    #[cfg(test)]
+    #[test]
+    fn tile_count_uses_the_non_wrapping_ceiling() {
+        let tiles = format!(
+            "unsigned int num_tiles = {};",
+            ceiling_quotient_source("k", "16u")
+        );
+        let source = gemm_shader_source();
+        assert_eq!(source.matches(&tiles).count(), 1);
+        assert!(!source.contains("+ 15u) / 16u"));
     }
 
     #[expect(

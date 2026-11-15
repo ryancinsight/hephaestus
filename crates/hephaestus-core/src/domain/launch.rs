@@ -82,6 +82,31 @@ impl Default for BlockWidth {
     }
 }
 
+/// Kernel-source expression for the ceiling quotient `⌈n / d⌉` of two
+/// unsigned 32-bit kernel expressions, exact over every `n` and `d >= 1`.
+///
+/// The usual `(n + d - 1) / d` wraps for `n > u32::MAX - (d - 1)` and
+/// yields a quotient near zero, so a tiled loop bounded by it skips every
+/// tile. Writing `n = q·d + r` with `0 <= r < d` gives `⌈n / d⌉ = q +
+/// min(r, 1)`. The sum cannot wrap: `q = u32::MAX` forces `d = 1`, hence
+/// `r = 0`. The expression is `n / d + min(n % d, 1u)`, and the same text
+/// is valid WGSL, CUDA C++ and HIP C++, since each defines `min` over
+/// unsigned 32-bit operands.
+///
+/// Each operand is parenthesized and appears twice, so it must be free of
+/// side effects. The kernel guarantees `d != 0`.
+///
+/// # Examples
+///
+/// ```
+/// let tiles = hephaestus_core::ceiling_quotient_source("k", "16u");
+/// assert_eq!(tiles, "((k) / (16u) + min((k) % (16u), 1u))");
+/// ```
+#[must_use]
+pub fn ceiling_quotient_source(numerator: &str, divisor: &str) -> String {
+    format!("(({numerator}) / ({divisor}) + min(({numerator}) % ({divisor}), 1u))")
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

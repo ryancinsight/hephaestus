@@ -969,3 +969,15 @@ status ledger that stood here is program history; recover any entry with
 - Acceptance: an `f32` 17x16x16 plan needs a workspace of 65536 bytes; with a `max_buffer_size` of 65536 the query admits it and the plan prepares, and with 65535 the query and `prepare_fft` both return the refusal naming the workspace, 65536 bytes and 65535. The same boundary holds for the dispatch: admitted where `max_compute_workgroups_per_dimension` equals the workgroups the workspace needs, refused one below, naming the dispatch and both values (as a device test where a device with that limit can be acquired, otherwise on the sizing function with the limit as its argument). A 200x200x200 plan at a limit of 65535 workgroups is refused naming 80000. The SemVer comparison classifies the error change.
 - Observed in kwavers at this plan code (the file is unchanged between the revision kwavers locks, 72ffa0577952411a27182782637248a2c8a02ead, and the basis), on one host with an adapter. By the integrator of ryancinsight/kwavers#1059: a 200x200x200 request was refused with "FFT dispatch requires 80000 x workgroups, exceeding device max_compute_workgroups_per_dimension=65535". By the judge of that pull request, relayed from its comment 6814685775: a 17x16x16 plan at a `max_buffer_size` of 61440 was refused with "FFT workspace requires 65536 bytes, exceeding device max_buffer_size=61440". Derived from the shapes: 17 is not a power of two, m = 64, and 64 x 256 lines x 4 bytes = 65536; 200 gives m = 512, and 512 x 40000 lines / 256 = 80000.
 - Needs: none. Next step: draft the ADR for the error shape (a new variant of `HephaestusError` or a field on an existing one; either is a break), then extract the sizing from `WgpuFftPlan::new` into the query.
+
+<a id="heph-adaptive-pool-window-wrap"></a>
+
+## HEPH-ADAPTIVE-POOL-WINDOW-WRAP — Exact adaptive-pooling windows past 2^32 [patch] — todo
+- Priority: correctness.
+- milestone: M-compute-contracts.
+- basis: 991237052e677b67126ac923ade24e9fe31bbe9b.
+- Scope: `adaptive_pooling_seam.rs` in `hephaestus-wgpu`, `hephaestus-cuda` and `hephaestus-rocm`; `crates/hephaestus-core/src/domain/adaptive_pooling.rs`.
+- Defect (derived, not executed): the kernels compute `start = out_idx * in_len / out_len` and `end = ((out_idx + 1u) * in_len + out_len - 1u) / out_len` in u32, and no host check bounds `in_len * out_len` (CUDA/ROCm check only `lanes * out_len`). At `in_len = out_len = 65536`, `out_idx = 65535`: `start = 65535`, the product `65536 * 65536` wraps to 0, so `end = 0 < start` and the last cell's window is wrong.
+- Outcome: windows equal `adaptive_window` for every u32 `in_len`, `out_len`, by an exact multiply-divide in the kernel or a typed refusal of `in_len * out_len > u32::MAX` at dispatch validation.
+- Acceptance: a test that fails at the basis evaluates both bounds at `in_len = out_len = 65536` and at the u32 edges against `adaptive_window`; device tests on the 65536 case where an adapter exists.
+- Needs: none. Next step: choose exact arithmetic or refusal against the seam contract, then pin the window expressions as the tile counts are pinned in `index_arithmetic.rs`.

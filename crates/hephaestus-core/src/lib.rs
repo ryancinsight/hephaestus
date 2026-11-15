@@ -101,7 +101,7 @@ pub use domain::kernel::{
     BinaryStorageKernel, DispatchGrid, FlatMultiStorageKernel, MultiStorageDevice,
     MultiStorageKernel, UnaryStorageKernel,
 };
-pub use domain::launch::BlockWidth;
+pub use domain::launch::{BlockWidth, ceiling_quotient_source};
 pub use domain::loss::{
     CrossEntropyBackwardOperands, CrossEntropyForwardOperands, CrossEntropyOps, CrossEntropyPlan,
     CrossEntropyScalar, CrossEntropyStatus, plan_cross_entropy_backward,

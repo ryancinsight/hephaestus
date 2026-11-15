@@ -6,6 +6,8 @@ pub(crate) mod bindings;
 pub mod decomposition;
 /// Elementwise binary kernels.
 pub mod elementwise;
+#[cfg(test)]
+mod index_arithmetic;
 /// Linear algebra compute operations.
 pub mod linalg;
 pub(crate) mod pipeline;

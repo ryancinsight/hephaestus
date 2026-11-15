@@ -1,6 +1,6 @@
 use std::any::TypeId;
 
-use hephaestus_core::{HephaestusError, Result};
+use hephaestus_core::{HephaestusError, Result, ceiling_quotient_source};
 
 use crate::application::pipeline::cached_pipeline;
 use crate::infrastructure::buffer::WgpuBuffer;
@@ -66,7 +66,7 @@ fn main(
     let b_off = params.offsets.z;
 
     var sum = {ty}({zero});
-    let num_tiles = (k + 15u) / 16u;
+    let num_tiles = {tiles};
 
     for (var tile: u32 = 0u; tile < num_tiles; tile = tile + 1u) {{
         // Load tile of A: A[row, tile*16 + lid.x]
@@ -102,6 +102,7 @@ fn main(
 }}
 "#,
         ty = TY,
+        tiles = ceiling_quotient_source("k", "16u"),
         zero = ZERO,
     )
 }
@@ -240,4 +241,11 @@ pub(crate) fn gemm_trailing_update(
     device.queue().submit(Some(encoder.finish()));
 
     Ok(())
+}
+
+#[cfg(test)]
+#[test]
+fn tile_count_is_exact_at_u32_boundaries() {
+    let source = gemm_shader_source();
+    crate::application::index_arithmetic::assert_tile_count_is_exact(&source, "let num_tiles", "k");
 }

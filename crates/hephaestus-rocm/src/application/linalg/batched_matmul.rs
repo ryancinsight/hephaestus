@@ -2,7 +2,10 @@
 
 use core::marker::PhantomData;
 use eunomia::Pod;
-use hephaestus_core::{ComputeDevice, DeviceBuffer, DialectScalar, HephaestusError, HipC, Result};
+use hephaestus_core::{
+    ComputeDevice, DeviceBuffer, DialectScalar, HephaestusError, HipC, Result,
+    ceiling_quotient_source,
+};
 use leto::Layout;
 
 use super::{GpuMatrixLayout, map_layout, map_layout_err, to_i64};
@@ -52,7 +55,7 @@ extern "C" __global__ void batched_matmul_kernel(
     long long b_batch_offset = (long long)batch * b_batch_stride;
     long long c_batch_offset = (long long)batch * c_batch_stride;
     {ty} sum = 0;
-    unsigned int tile_count = (shared + 15u) / 16u;
+    unsigned int tile_count = {tiles};
 
     for (unsigned int tile = 0u; tile < tile_count; tile++) {{
         unsigned int a_col = tile * 16u + local_col;
@@ -91,6 +94,7 @@ extern "C" __global__ void batched_matmul_kernel(
 }}
 "#,
         ty = T::TYPE_TOKEN,
+        tiles = ceiling_quotient_source("shared", "16u"),
     )
 }
 
@@ -326,5 +330,10 @@ mod tests {
         assert!(source.contains("blockIdx.z"));
         assert!(source.contains("batch_offset"));
         assert!(source.contains("long long a_batch_stride"));
+        let tiles = format!(
+            "unsigned int tile_count = {};",
+            hephaestus_core::ceiling_quotient_source("shared", "16u")
+        );
+        assert_eq!(source.matches(&tiles).count(), 1);
     }
 }
