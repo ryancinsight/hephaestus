@@ -37,5 +37,5 @@ pub use norms::{L2NormScalar, dot, norm_l1, norm_l2, norm_max, trace};
 pub use pinv_matexp::{matexp, pinv};
 
 use hephaestus_core::map_layout_err;
-use layout::{GpuMatrixLayout, map_layout, to_i64};
+use layout::{GpuMatrixLayout, map_layout, to_i64, validate_signed_address_range};
 pub(crate) use layout::{to_i32, to_u32};
