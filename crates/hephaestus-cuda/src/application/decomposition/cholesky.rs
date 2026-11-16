@@ -240,6 +240,7 @@ mod syrk_impl {
     use super::*;
     use crate::application::linalg::{to_i32, to_u32};
     use crate::application::pipeline::{LaunchConfig, PipelineKey, cached_kernel, launch_kernel};
+    use hephaestus_core::ceiling_quotient_source;
 
     #[repr(C)]
     #[derive(Clone, Copy, eunomia::Pod, eunomia::Zeroable)]
@@ -253,21 +254,22 @@ mod syrk_impl {
     }
 
     fn syrk_shader_source() -> String {
-        r#"
-    struct SyrkMeta {
+        format!(
+            r#"
+    struct SyrkMeta {{
         unsigned int shape[2];
         int strides[2];
         unsigned int offset;
         unsigned int panel_cols;
         unsigned int panel_offset;
         unsigned int panel_stride;
-    };
+    }};
 
     extern "C" __global__ void syrk_kernel(
         const float* panel,
         float* trail,
         SyrkMeta meta
-    ) {
+    ) {{
         __shared__ float panel_row_shared[16][16];
 
         unsigned int col = blockIdx.x * 16u + threadIdx.x;
@@ -283,39 +285,52 @@ mod syrk_impl {
         unsigned int off = meta.offset;
 
         float sum = 0.0f;
-        unsigned int num_tiles = (k + 15u) / 16u;
+        unsigned int num_tiles = {tiles};
 
-        for (unsigned int tile = 0u; tile < num_tiles; tile++) {
+        for (unsigned int tile = 0u; tile < num_tiles; tile++) {{
             unsigned int panel_col = tile * 16u + local_col;
-            if (row < rows && panel_col < k) {
+            if (row < rows && panel_col < k) {{
                 panel_row_shared[local_row][local_col] = panel[meta.panel_offset + row * meta.panel_stride + panel_col];
-            } else {
+            }} else {{
                 panel_row_shared[local_row][local_col] = 0.0f;
-            }
+            }}
 
             __syncthreads();
 
-            if (row < rows && col < cols && col <= row) {
-                for (unsigned int i = 0u; i < 16u; i++) {
+            if (row < rows && col < cols && col <= row) {{
+                for (unsigned int i = 0u; i < 16u; i++) {{
                     unsigned int ki = tile * 16u + i;
-                    if (ki < k) {
+                    if (ki < k) {{
                         float a_val = panel_row_shared[local_row][i];
                         float b_val = panel[meta.panel_offset + col * meta.panel_stride + ki];
                         sum += a_val * b_val;
-                    }
-                }
-            }
+                    }}
+                }}
+            }}
 
             __syncthreads();
-        }
+        }}
 
-        if (row < rows && col < cols && col <= row) {
+        if (row < rows && col < cols && col <= row) {{
             int c_off = (int)off + (int)row * stride_row + (int)col * stride_col;
             trail[c_off] -= sum;
-        }
+        }}
+    }}
+        "#,
+            tiles = ceiling_quotient_source("k", "16u"),
+        )
     }
-        "#
-        .to_string()
+
+    #[cfg(test)]
+    #[test]
+    fn tile_count_uses_the_non_wrapping_ceiling() {
+        let tiles = format!(
+            "unsigned int num_tiles = {};",
+            ceiling_quotient_source("k", "16u")
+        );
+        let source = syrk_shader_source();
+        assert_eq!(source.matches(&tiles).count(), 1);
+        assert!(!source.contains("+ 15u) / 16u"));
     }
 
     pub(crate) fn syrk_trailing_update(

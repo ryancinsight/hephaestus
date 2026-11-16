@@ -10,7 +10,9 @@ use crate::application::strided::{StridedOperand, map_layout_err, to_u32};
 use crate::infrastructure::buffer::WgpuBuffer;
 use crate::infrastructure::device::WgpuDevice;
 use eunomia::Pod;
-use hephaestus_core::{ComputeDevice, DialectScalar, HephaestusError, Result, Wgsl};
+use hephaestus_core::{
+    ComputeDevice, DialectScalar, HephaestusError, Result, Wgsl, ceiling_quotient_source,
+};
 use leto::Layout;
 use std::any::TypeId;
 
@@ -53,7 +55,7 @@ fn main(
     let stride_b_col = b_layout.strides.y;
 
     var sum = {ty}({zero});
-    let num_tiles = (k + 15u) / 16u;
+    let num_tiles = {tiles};
 
     for (var tile_idx: u32 = 0u; tile_idx < num_tiles; tile_idx = tile_idx + 1u) {{
         // 1. Load A element into shared memory
@@ -95,6 +97,7 @@ fn main(
 }}
 "#,
         ty = T::TYPE_TOKEN,
+        tiles = ceiling_quotient_source("k", "16u"),
         zero = T::WGSL_ZERO
     )
 }
@@ -394,4 +397,11 @@ where
         },
     )?;
     Ok(out)
+}
+
+#[cfg(test)]
+#[test]
+fn tile_count_is_exact_at_u32_boundaries() {
+    let source = matmul_shader_source::<f32>();
+    crate::application::index_arithmetic::assert_tile_count_is_exact(&source, "let num_tiles", "k");
 }

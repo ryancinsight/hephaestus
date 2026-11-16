@@ -2,7 +2,10 @@
 
 use core::marker::PhantomData;
 use eunomia::Pod;
-use hephaestus_core::{ComputeDevice, DeviceBuffer, DialectScalar, HephaestusError, HipC, Result};
+use hephaestus_core::{
+    ComputeDevice, DeviceBuffer, DialectScalar, HephaestusError, HipC, Result,
+    ceiling_quotient_source,
+};
 use leto::Layout;
 
 use super::{GpuMatrixLayout, map_layout, map_layout_err, validate_signed_address_range};
@@ -41,7 +44,7 @@ extern "C" __global__ void matmul_kernel(
     unsigned int shared = a_layout.shape[1];
     unsigned int cols = b_layout.shape[1];
     {ty} sum = 0;
-    unsigned int tile_count = (shared + 15u) / 16u;
+    unsigned int tile_count = {tiles};
 
     for (unsigned int tile = 0u; tile < tile_count; tile++) {{
         unsigned int a_col = tile * 16u + local_col;
@@ -77,6 +80,7 @@ extern "C" __global__ void matmul_kernel(
 }}
 "#,
         ty = T::TYPE_TOKEN,
+        tiles = ceiling_quotient_source("shared", "16u"),
     )
 }
 
@@ -239,5 +243,10 @@ mod tests {
         assert!(source.contains("blockIdx.x"));
         assert!(source.contains("blockIdx.y"));
         assert!(source.contains("__syncthreads();"));
+        let tiles = format!(
+            "unsigned int tile_count = {};",
+            hephaestus_core::ceiling_quotient_source("shared", "16u")
+        );
+        assert_eq!(source.matches(&tiles).count(), 1);
     }
 }

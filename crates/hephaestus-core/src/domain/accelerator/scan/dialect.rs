@@ -1,5 +1,5 @@
 use crate::domain::dialect::{CudaC, DialectScalar, HipC, KernelDialect};
-use crate::domain::launch::BlockWidth;
+use crate::domain::launch::{BlockWidth, ceiling_quotient_source};
 use crate::domain::ops::{CombineExpr, IdentityToken};
 
 /// A kernel dialect that can express a rank-2 axis scan.
@@ -84,9 +84,13 @@ extern "C" __global__ void {entry}(
     unsigned int axis = meta.offsets[2] & 1u;
     bool reverse = (meta.offsets[2] & 2u) != 0u;
     unsigned int len = (axis == 0u) ? rows : cols;
-    unsigned int chunk_len = (len + {wg}u - 1u) / {wg}u;
+    unsigned int chunk_len = {chunk_len};
+    // `start = lane * chunk_len` is at most `len` when `chunk_len >= {wg}u - 1u`
+    // and below `{wg}u * {wg}u` otherwise, so it cannot wrap for widths up to
+    // 65536. Bounding by the remaining length keeps `end <= len` where
+    // `start + chunk_len` wraps.
     unsigned int start = lane * chunk_len;
-    unsigned int end = min(start + chunk_len, len);
+    unsigned int end = start + min(chunk_len, len - min(start, len));
     {ty} local_acc = {identity};
 
     // Empty lanes retain the identity. `axis` and `reverse` are uniform
@@ -129,6 +133,7 @@ extern "C" __global__ void {entry}(
         prelude = <T as DialectScalar<L>>::PRELUDE,
         ty = <T as DialectScalar<L>>::TYPE_TOKEN,
         wg = width.get(),
+        chunk_len = ceiling_quotient_source("len", &format!("{}u", width.get())),
         identity = <T as IdentityToken<Op, L>>::TOKEN,
         expr = <Op as CombineExpr<L>>::EXPR,
         entry = AXIS_SCAN_ENTRY,

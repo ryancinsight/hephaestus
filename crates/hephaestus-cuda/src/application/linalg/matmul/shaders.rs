@@ -1,6 +1,6 @@
 use core::marker::PhantomData;
 
-use hephaestus_core::{CudaC, DialectScalar};
+use hephaestus_core::{CudaC, DialectScalar, ceiling_quotient_source};
 
 pub(crate) struct MatmulKernel<T>(PhantomData<T>);
 pub(crate) struct BatchedMatmulKernel<T>(PhantomData<T>);
@@ -40,7 +40,7 @@ extern "C" __global__ void matmul_kernel(
     int stride_b_col = b_layout.strides[1];
 
     {ty} sum = 0;
-    unsigned int num_tiles = (k + 15u) / 16u;
+    unsigned int num_tiles = {tiles};
 
     for (unsigned int tile_idx = 0u; tile_idx < num_tiles; tile_idx++) {{
         // 1. Load A element into shared memory
@@ -81,6 +81,7 @@ extern "C" __global__ void matmul_kernel(
 "#,
         prelude = T::PRELUDE,
         ty = T::TYPE_TOKEN,
+        tiles = ceiling_quotient_source("k", "16u"),
     )
 }
 
@@ -128,7 +129,7 @@ extern "C" __global__ void batched_matmul_kernel(
     int stride_b_col = b_layout.strides[1];
 
     {ty} sum = 0;
-    unsigned int num_tiles = (k + 15u) / 16u;
+    unsigned int num_tiles = {tiles};
 
     for (unsigned int tile_idx = 0u; tile_idx < num_tiles; tile_idx++) {{
         // 1. Load A element into shared memory
@@ -172,5 +173,22 @@ extern "C" __global__ void batched_matmul_kernel(
 "#,
         prelude = T::PRELUDE,
         ty = T::TYPE_TOKEN,
+        tiles = ceiling_quotient_source("k", "16u"),
     )
+}
+
+#[cfg(test)]
+#[test]
+fn tile_counts_use_the_non_wrapping_ceiling() {
+    let tiles = format!(
+        "unsigned int num_tiles = {};",
+        ceiling_quotient_source("k", "16u")
+    );
+    for source in [
+        matmul_shader_source::<f32>(),
+        batched_matmul_shader_source::<f32>(),
+    ] {
+        assert_eq!(source.matches(&tiles).count(), 1);
+        assert!(!source.contains("+ 15u) / 16u"));
+    }
 }
