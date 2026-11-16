@@ -863,24 +863,25 @@ status ledger that stood here is program history; recover any entry with
 
 ## HEPH-ROCM-PRODUCT-VALIDATION-1 — Mirror CUDA product validation on ROCm [patch] — todo
 - milestone: M-compute-contracts.
-- Outcome: ROCm matrix and Kronecker products get the checked-address and
-  empty-sum contracts #487 landed for CUDA.
-- Scope: `crates/hephaestus-rocm/src/application/linalg/` (`mod.rs`,
-  `kron.rs`, `matmul/{single,batched}.rs`),
-  `tests/dense_product_contracts.rs`.
-- Evidence: #487 landed CUDA-only because the #427 rescue has no ROCm
-  equivalent to port.
-- Acceptance: `validate_signed_address_range` + the 9-case oracle ported;
-  kron/single call sites wired (verify the HIP batched kernel widens to
-  `long long` before excluding it); k=0 dispatches-and-zeroes (verify
-  zero-tile behavior of the HIP kernel first); empty-product device
-  matrix mirrored. No ROCm hardware locally or in CI: land behind the
-  existing compile gates + adapterless legs; do not land blind device
-  claims.
+- Outcome: ROCm matrix and Kronecker products get the empty-sum contract #487
+  landed for CUDA. The checked-address contract is delivered: single `matmul`
+  and `kron` reject layouts whose maximum address exceeds `i32::MAX`
+  (`validate_signed_address_range`, 9-case host oracle); the HIP batched
+  kernel widens every address term to `long long` and stays unbounded.
+- Scope: `crates/hephaestus-rocm/src/application/linalg/{matmul,batched_matmul}.rs`,
+  `crates/hephaestus-rocm/tests/dense_product_contracts.rs`.
+- Evidence: the HIP `matmul_kernel` skips its tile loop when `k == 0` and
+  writes `sum = 0` (read from source, not executed); `matmul_into` still
+  returns before dispatch on `lhs_shared == 0`, leaving the output unwritten.
+- Acceptance: `k == 0` dispatches and zeroes the output without reading
+  either operand; the empty-product device matrix of #487 is mirrored over
+  the admitted scalars, strided padded outputs, batched form and both
+  allocating forms. Needs a ROCm device to execute: land the device
+  assertions only with a run on one; do not land blind device claims.
 - Dependencies: none. Priority P1; risk: device addressing correctness.
-- Verification: focused metadata/codegen and adapterless product tests,
-  strict affected Clippy, docs and independent review.
-- Last-update: 2026-10-14.
+- Verification: required-device empty-product matrix, strict affected
+  Clippy, docs and independent review.
+- Last-update: 2026-11-15.
 
 <a id="heph-roll-f64-gpu-1"></a>
 
@@ -969,6 +970,21 @@ status ledger that stood here is program history; recover any entry with
 - Acceptance: an `f32` 17x16x16 plan needs a workspace of 65536 bytes; with a `max_buffer_size` of 65536 the query admits it and the plan prepares, and with 65535 the query and `prepare_fft` both return the refusal naming the workspace, 65536 bytes and 65535. The same boundary holds for the dispatch: admitted where `max_compute_workgroups_per_dimension` equals the workgroups the workspace needs, refused one below, naming the dispatch and both values (as a device test where a device with that limit can be acquired, otherwise on the sizing function with the limit as its argument). A 200x200x200 plan at a limit of 65535 workgroups is refused naming 80000. The SemVer comparison classifies the error change.
 - Observed in kwavers at this plan code (the file is unchanged between the revision kwavers locks, 72ffa0577952411a27182782637248a2c8a02ead, and the basis), on one host with an adapter. By the integrator of ryancinsight/kwavers#1059: a 200x200x200 request was refused with "FFT dispatch requires 80000 x workgroups, exceeding device max_compute_workgroups_per_dimension=65535". By the judge of that pull request, relayed from its comment 6814685775: a 17x16x16 plan at a `max_buffer_size` of 61440 was refused with "FFT workspace requires 65536 bytes, exceeding device max_buffer_size=61440". Derived from the shapes: 17 is not a power of two, m = 64, and 64 x 256 lines x 4 bytes = 65536; 200 gives m = 512, and 512 x 40000 lines / 256 = 80000.
 - Needs: none. Next step: draft the ADR for the error shape (a new variant of `HephaestusError` or a field on an existing one; either is a break), then extract the sizing from `WgpuFftPlan::new` into the query.
+
+<a id="heph-semver-baseline-028"></a>
+## HEPH-SEMVER-BASELINE-028 — Classify the release against the published 0.28.0 contract [verification] — todo
+- basis: 53ffe514f3ab68afec037195ca2ac625f88cdc11; priority: verification; milestone: M-compute-contracts; needs: none; scope: `crates/hephaestus-core/src/domain/reduction.rs`, `crates/hephaestus-wgpu/src/application/canary/probe.rs`, `crates/hephaestus-rocm/src/application/mod.rs`, release version metadata.
+- Outcome: the release carrying the 0.28.0-to-master delta is classified per crate against the published 0.28.0 contract, so the version bump matches the break. Evidence (read at the basis): `.cargo_vcs_info.json` of the published 0.28.0 core, wgpu, cuda, rocm, metal and host names 03a8754385b0cbfb3767ce88301a3f0580b347a1, 53 commits behind master (`git rev-list --count 03a87543..origin/master`). Additive since then: `hephaestus-core` `checked_shared_bytes` (`crates/hephaestus-core/src/domain/reduction.rs:180`, crate-root re-export; only `pub(crate)` at 03a87543 in cuda `application/linalg/norms.rs:156`, rocm `application/linalg/norms.rs:157` and rocm `application/reduction.rs:60`) and `hephaestus-wgpu` `probe_exp_routine` (`crates/hephaestus-wgpu/src/application/canary/probe.rs:286`; absent at 03a87543). Breaking: `hephaestus-rocm` has no `pub mod axis_reduction` (`src/application/mod.rs:10` at 03a87543); its functions stay at the crate root through `application::reduction`. This list is what was read, not an exhaustive diff. The pull-request job compares against the pull-request base, so only the release job (`rust-release.yml:33`, registry baseline) compares this delta with 0.28.0. A comparison against 03a87543 is expected to hit the resolution failure of [HEPH-SEMVER-PR-PIN](#heph-semver-pr-pin), because that revision requires `leto <0.48.0` (`Cargo.toml:72`, `:79` at 03a87543) and the locked git leto is 0.49.0 (hypothesis, not run). Acceptance: a locked-graph comparison (atlas `scripts/atlas_semver_locked.py`) of each of the six crates against 03a87543 returns a verdict rather than a tool failure and reports the rocm path removal as a break; the candidate version is 0.29.0, the version M-compute-contracts plans, before the release job runs. Next step: run the six comparisons from a scratch export. Links: [ATLAS-PUB-013](../../backlog.md#atlas-pub-013), [HEPH-SEMVER-PR-PIN](#heph-semver-pr-pin).
+
+<a id="heph-semver-pr-pin"></a>
+## HEPH-SEMVER-PR-PIN — Pull-request SemVer job misreports a resolution failure [verification] — todo
+- basis: 53ffe514f3ab68afec037195ca2ac625f88cdc11; priority: verification; milestone: M-compute-contracts; needs: none; scope: `.github/workflows/ci.yml`.
+- Outcome: the SemVer job on a pull request reports a class or a per-crate tool failure for every package, never a green job without analysis and never a version-bump verdict for a resolution failure. Evidence: `ci.yml:51` and `:56` pin atlas `semver-gate.yml@6808fcd7390ffecea09a50d5e295a2730a9c3c4a` (2026-11-10), which does not contain atlas d8dad1bb1 (Run the locked comparison on PRs, 2026-11-14). Run 43772097507, job 132990050073 (PR #545): cargo-semver-checks stops with `failed to select a version for the requirement leto = ">=0.46.1, <0.49.0"` (log lines 413 and 707, exit code 101) while the job concludes success through the step-level continue-on-error. The Report step (`semver-gate.yml:235-253` at that pin) takes its else branch for any outcome but success and writes `### SemVer: a version bump is required`, a wrong verdict for what was a resolution failure; the message of atlas d8dad1bb1 names this misreport. [ATLAS-PUB-013](../../backlog.md#atlas-pub-013) owns advancing member pins, but its clause (1) names the guard commit 0ca2bb0d3, an ancestor of the `ci.yml` pin, so that item can close with this job unfixed. Acceptance: both pins name atlas d8dad1bb1 or a descendant, and a pull-request run's SemVer summary lists a class or a recorded tool failure for each of the five `ci.yml` packages, and no summary states a version bump for a run whose tool failed. Links: [ATLAS-PUB-013](../../backlog.md#atlas-pub-013), [HEPH-SEMVER-BASELINE-028](#heph-semver-baseline-028). Next step: advance both pins in the pull request that applies ATLAS-PUB-013 here.
+
+<a id="heph-leto-floor"></a>
+## HEPH-LETO-FLOOR — Verify or raise the leto 0.46.1 requirement floor [verification] — todo
+- basis: 53ffe514f3ab68afec037195ca2ac625f88cdc11; priority: verification; milestone: M-compute-contracts; needs: none; scope: `Cargo.toml`.
+- Outcome: the lower bound of the `leto` and `leto-ops` requirements names the oldest leto the workspace builds against, and the manifest comment matches the dependency set. Evidence: `Cargo.toml:72` and `:79` admit `>=0.46.1`; `Cargo.lock` resolves both at 0.49.0 (leto bd349c5e) and no job in `.github` or `scripts` (searched for minimal-versions) builds another leto, so 0.46.1 and 0.47.0 are unbuilt. The comment at `:71` says leto-ops is not pulled while `:79` declares it and seven member crates depend on it: conformance, cuda, host, metal (`Cargo.toml:27`, dev `:32`), python, rocm (`:25`) and wgpu (optional `:31` behind `decomposition` and `sparse`, dev `:47`). `:72` and `:79` read `>=0.46.1, <0.50.0` since #545 merged (53ffe514), which left the floor. Acceptance: `cargo check --workspace --all-targets` passes with leto and leto-ops taken from the leto revisions tagged `crate-leto-v0.46.1` and `crate-leto-v0.47.0` (a git dependency has one version per source, so `-Zdirect-minimal-versions` cannot select them; patch the source with `--config`), or the floor rises to the lowest release that passes; the `:71` comment names leto-ops. Next step: run the two builds in a scratch export and record each result. Links: [HEPH-SEMVER-PR-PIN](#heph-semver-pr-pin).
 
 <a id="heph-adaptive-pool-window-wrap"></a>
 
