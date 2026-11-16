@@ -8,6 +8,7 @@
 //! emit the same text: `/`, `%`, `+` and `min` on unsigned 32-bit operands
 //! mean the same in WGSL, CUDA C++ and HIP C++.
 
+use crate::application::scan::scan_shader_source;
 use hephaestus_core::BlockWidth;
 use hephaestus_core::{CudaC, CumSumOp, c_family_axis_scan_source, ceiling_quotient_source};
 use wgpu::naga::{Expression, Literal, front::wgsl::parse_str};
@@ -89,48 +90,63 @@ fn ceiling_quotient_is_exact_at_u32_boundaries() {
     }
 }
 
+/// Assert that the lanes of a generated scan kernel split `[0, len)` into
+/// consecutive chunks of `⌈len / width⌉`, for every `len` at the u32
+/// boundaries. `declaration` is the dialect's binding keyword.
+fn assert_scan_chunks_partition(source: &str, declaration: &str, width: u32) {
+    let chunk_len = assigned_expression(source, &format!("{declaration} chunk_len"));
+    let start = assigned_expression(source, &format!("{declaration} start"));
+    let end = assigned_expression(source, &format!("{declaration} end"));
+    for len in [
+        0,
+        1,
+        width - 1,
+        width,
+        width + 1,
+        u32::MAX - width,
+        u32::MAX,
+    ] {
+        let len_binding = ("len", format!("{len}u"));
+        assert_eq!(
+            evaluate(core::slice::from_ref(&len_binding), chunk_len).map(u64::from),
+            Ok(u64::from(len).div_ceil(u64::from(width))),
+            "width {width}, len {len}: `{chunk_len}`"
+        );
+        let mut covered = 0u64;
+        for lane in 0..width {
+            let bindings = [
+                len_binding.clone(),
+                ("lane", format!("{lane}u")),
+                ("chunk_len", chunk_len.to_string()),
+                ("start", start.to_string()),
+            ];
+            let first = evaluate(&bindings, "start").map(u64::from);
+            let stop = evaluate(&bindings, end).map(u64::from);
+            // Lanes cover consecutive, disjoint ranges: a lane starting
+            // inside the line starts where the previous one stopped, and
+            // a lane starting at or past its end runs no iteration.
+            let (first, stop) = match (first, stop) {
+                (Ok(first), Ok(stop)) => (first, stop),
+                failed => panic!("width {width}, len {len}, lane {lane}: {failed:?}"),
+            };
+            if first < u64::from(len) {
+                assert_eq!(first, covered, "width {width}, len {len}, lane {lane}");
+                covered = stop;
+            } else {
+                assert!(stop <= first, "width {width}, len {len}, lane {lane}");
+            }
+        }
+        assert_eq!(covered, u64::from(len), "width {width}, len {len}");
+    }
+}
+
 #[test]
 fn scan_chunks_partition_the_line_at_u32_boundaries() {
     for width in [8u32, 256] {
         let block = BlockWidth::new(width).expect("non-zero test width");
-        let source = c_family_axis_scan_source::<CudaC, CumSumOp, f32>(block);
-        let chunk_len = assigned_expression(&source, "unsigned int chunk_len");
-        let start = assigned_expression(&source, "unsigned int start");
-        let end = assigned_expression(&source, "unsigned int end");
-        for len in [
-            0,
-            1,
-            width - 1,
-            width,
-            width + 1,
-            u32::MAX - width,
-            u32::MAX,
-        ] {
-            let mut covered = 0u64;
-            for lane in 0..width {
-                let bindings = [
-                    ("len", format!("{len}u")),
-                    ("lane", format!("{lane}u")),
-                    ("chunk_len", chunk_len.to_string()),
-                    ("start", start.to_string()),
-                ];
-                let start = evaluate(&bindings, "start").map(u64::from);
-                let stop = evaluate(&bindings, end).map(u64::from);
-                // Lanes cover consecutive, disjoint ranges: a lane starting
-                // inside the line starts where the previous one stopped, and
-                // a lane starting at or past its end runs no iteration.
-                let (start, stop) = match (start, stop) {
-                    (Ok(start), Ok(stop)) => (start, stop),
-                    failed => panic!("width {width}, len {len}, lane {lane}: {failed:?}"),
-                };
-                if start < u64::from(len) {
-                    assert_eq!(start, covered, "width {width}, len {len}, lane {lane}");
-                    covered = stop;
-                } else {
-                    assert!(stop <= start, "width {width}, len {len}, lane {lane}");
-                }
-            }
-            assert_eq!(covered, u64::from(len), "width {width}, len {len}");
-        }
+        let c_family = c_family_axis_scan_source::<CudaC, CumSumOp, f32>(block);
+        assert_scan_chunks_partition(&c_family, "unsigned int", width);
+        let wgsl = scan_shader_source::<CumSumOp, f32>(block);
+        assert_scan_chunks_partition(&wgsl, "let", width);
     }
 }
