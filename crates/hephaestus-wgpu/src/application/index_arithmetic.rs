@@ -1,10 +1,12 @@
 //! Adapterless evaluation of unsigned 32-bit kernel index arithmetic.
 //!
 //! Naga's constant evaluator folds a WGSL `const` declaration to a literal
-//! and rejects u32 overflow, so evaluating the exact expression text a
-//! kernel generator emits pins its value without a device. The C-family
-//! kernels emit the same text: `/`, `%`, `+` and `min` on unsigned 32-bit
-//! operands mean the same in WGSL, CUDA C++ and HIP C++.
+//! and wraps u32 `+`, `-` and `*` modulo 2^32 as the device does, so an
+//! overflowing expression evaluates to its wrapped value, not an error.
+//! Comparing that value against exact `u64` arithmetic pins the expression
+//! text a kernel generator emits without a device. The C-family kernels
+//! emit the same text: `/`, `%`, `+` and `min` on unsigned 32-bit operands
+//! mean the same in WGSL, CUDA C++ and HIP C++.
 
 use hephaestus_core::BlockWidth;
 use hephaestus_core::{CudaC, CumSumOp, c_family_axis_scan_source, ceiling_quotient_source};
@@ -93,6 +95,7 @@ fn scan_chunks_partition_the_line_at_u32_boundaries() {
         let block = BlockWidth::new(width).expect("non-zero test width");
         let source = c_family_axis_scan_source::<CudaC, CumSumOp, f32>(block);
         let chunk_len = assigned_expression(&source, "unsigned int chunk_len");
+        let start = assigned_expression(&source, "unsigned int start");
         let end = assigned_expression(&source, "unsigned int end");
         for len in [
             0,
@@ -109,7 +112,7 @@ fn scan_chunks_partition_the_line_at_u32_boundaries() {
                     ("len", format!("{len}u")),
                     ("lane", format!("{lane}u")),
                     ("chunk_len", chunk_len.to_string()),
-                    ("start", "lane * chunk_len".to_string()),
+                    ("start", start.to_string()),
                 ];
                 let start = evaluate(&bindings, "start").map(u64::from);
                 let stop = evaluate(&bindings, end).map(u64::from);
