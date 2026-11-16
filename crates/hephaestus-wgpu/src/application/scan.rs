@@ -6,7 +6,7 @@ use std::marker::PhantomData;
 use eunomia::Pod;
 use hephaestus_core::{
     AxisScanMeta, BlockWidth, CombineExpr, ComputeDevice, DialectScalar, IdentityToken, OpIdentity,
-    Result, Wgsl, plan_axis_scan,
+    Result, Wgsl, ceiling_quotient_source, plan_axis_scan,
 };
 use leto::Layout;
 
@@ -20,7 +20,7 @@ pub use hephaestus_core::{CumProdOp, CumSumOp, ScanDirection};
 
 struct AxisScanKernel<Op>(PhantomData<Op>);
 
-fn scan_shader_source<Op, T>(width: BlockWidth) -> String
+pub(crate) fn scan_shader_source<Op, T>(width: BlockWidth) -> String
 where
     Op: CombineExpr<Wgsl>,
     T: IdentityToken<Op, Wgsl>,
@@ -73,9 +73,13 @@ fn main(
     let axis = scan_meta.offsets.z & 1u;
     let reverse = (scan_meta.offsets.z & 2u) != 0u;
     let len = select(cols, rows, axis == 0u);
-    let chunk_len = (len + {wg}u - 1u) / {wg}u;
+    let chunk_len = {chunk_len};
+    // `lane * chunk_len` is at most `len` when `chunk_len >= {wg}u - 1u` and
+    // below `{wg}u * {wg}u` otherwise, so it cannot wrap for widths up to
+    // 65536. Bounding by the remaining length keeps `end <= len` where
+    // `start + chunk_len` wraps.
     let start = lane * chunk_len;
-    let end = min(start + chunk_len, len);
+    let end = start + min(chunk_len, len - min(start, len));
     var local_acc: {ty} = {identity};
 
     // `axis` and `reverse` are uniform across the dispatch, so these selects
@@ -118,6 +122,7 @@ fn main(
         prelude = T::PRELUDE,
         ty = T::TYPE_TOKEN,
         wg = width.get(),
+        chunk_len = ceiling_quotient_source("len", &format!("{}u", width.get())),
         identity = <T as IdentityToken<Op, Wgsl>>::TOKEN,
         expr = <Op as CombineExpr<Wgsl>>::EXPR,
     )
