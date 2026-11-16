@@ -2,7 +2,7 @@
 
 - Status: Accepted
 - Date: 2026-07-30
-- Board item: `HEPH-CONVOLUTION-PROVIDER-1`
+- Delivered by: [PR #159](https://github.com/ryancinsight/hephaestus/pull/159)
 - Cross-repository driver: Coeus ADR 0046
 - Change class: `[arch] [minor]`
 
