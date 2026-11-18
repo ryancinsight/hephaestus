@@ -4,11 +4,7 @@ use std::sync::Arc;
 
 use hephaestus_core::DeviceBuffer;
 
-/// A raw CUDA device pointer (`CUdeviceptr`), an opaque device address.
-///
-/// Kept as the CUDA driver's driver ABI type without exposing the CUDA driver in public
-/// APIs; consumers see an opaque integer address for custom kernel launches.
-pub type DevicePtr = u64;
+pub use crate::device_ptr::DevicePtr;
 
 /// A typed, device-resident linear buffer of `len` elements of `T`.
 ///

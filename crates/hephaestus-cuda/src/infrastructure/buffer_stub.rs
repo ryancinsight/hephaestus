@@ -2,6 +2,8 @@ use core::marker::PhantomData;
 
 use hephaestus_core::DeviceBuffer;
 
+pub use crate::device_ptr::DevicePtr;
+
 /// Stub device buffer for builds without the `cuda` feature.
 ///
 /// No device memory is held; the type exists only to satisfy the

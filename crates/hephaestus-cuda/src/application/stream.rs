@@ -28,10 +28,7 @@ use crate::infrastructure::buffer::CudaBuffer;
 use crate::infrastructure::compiler::SafeCachedKernel;
 use crate::infrastructure::device::CudaDevice;
 
-#[cfg(feature = "cuda")]
 use crate::infrastructure::buffer::DevicePtr;
-#[cfg(not(feature = "cuda"))]
-type DevicePtr = u64;
 
 /// Prepared CUDA kernel for a source type `K`.
 pub struct CudaPrepared<K> {
