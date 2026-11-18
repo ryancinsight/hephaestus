@@ -23,10 +23,7 @@ use crate::application::pipeline::{
 use crate::infrastructure::buffer::CudaBuffer;
 use crate::infrastructure::device::CudaDevice;
 
-#[cfg(feature = "cuda")]
 use crate::infrastructure::buffer::DevicePtr;
-#[cfg(not(feature = "cuda"))]
-type DevicePtr = u64;
 
 /// One typed CUDA storage-buffer binding for a multi-storage CUDA C kernel.
 #[derive(Clone, Copy, Debug)]

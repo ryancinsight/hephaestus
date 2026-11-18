@@ -37,6 +37,7 @@
 //! contract of `hephaestus-wgpu`; direct linalg reductions use the same plan
 //! shape for one-shot execution.
 
+mod device_ptr;
 mod infrastructure;
 
 /// Monomorphized CUDA compute dispatch.

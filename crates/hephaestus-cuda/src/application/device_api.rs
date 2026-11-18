@@ -66,7 +66,7 @@ impl DeviceApi for CudaDevice {
     type Dialect = CudaC;
     type Kernel = CudaKernel;
     // `CUdeviceptr` is an opaque integer device address.
-    type DevicePtr = u64;
+    type DevicePtr = crate::device_ptr::DevicePtr;
     type CacheKey = CudaKernelCacheKey;
 
     #[inline]
