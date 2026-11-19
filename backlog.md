@@ -927,7 +927,9 @@ status ledger that stood here is program history; recover any entry with
 
 <a id="heph-semver-baseline-028"></a>
 ## HEPH-SEMVER-BASELINE-028 — Release the Leto 0.51 accelerator boundary in Hephaestus 0.29.0 [major] — todo
-- Priority: correctness. Milestone: M-compute-contracts. Needs: published Leto and Leto Ops 0.51.0.
+- priority: correctness
+- milestone: M-compute-contracts
+- needs: published Leto and Leto Ops 0.51.0.
 - Outcome: all six libraries share the Leto 0.51, Aequitas 0.4, and Eunomia 0.12.1 provider types. [ADR 0089](docs/adr/0089-published-provider-boundary.md) records the registry boundary and the ROCm import migration.
 - Acceptance: exact-head SemVer and backend checks, six normalized packages, then a fresh registry consumer exercising the Host stencil through Leto Ops.
 - Next step: compare the candidate with published 0.28.0 and verify the ordered releases.
