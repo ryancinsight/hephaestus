@@ -45,6 +45,11 @@ impl Axis {
     }
 }
 
+pub(super) fn fused_grid(batch: u32, max_per_axis: u32) -> [u32; 2] {
+    let x = batch.min(max_per_axis);
+    [x, batch.div_ceil(x)]
+}
+
 pub(crate) struct ChirpData<T> {
     pub(crate) real_kernel: WgpuBuffer<T>,
     pub(crate) imaginary_kernel: WgpuBuffer<T>,

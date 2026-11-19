@@ -2,6 +2,13 @@
 
 ## [0.28.0] - Unreleased
 
+### Breaking
+
+- [major] Add the typed FFT capacity error. Exhaustive accelerator error
+  matches handle the new variant and can inspect the required count and the
+  device limit directly. WGPU exposes the same plan requirements before
+  allocating buffers.
+
 ### Fixed
 
 - [minor] Type the FDTD grid and medium constructors with aequitas

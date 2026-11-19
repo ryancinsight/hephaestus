@@ -913,7 +913,14 @@ status ledger that stood here is program history; recover any entry with
 
 <a id="heph-fft-plan-requirements"></a>
 
-## HEPH-FFT-PLAN-REQUIREMENTS — Report what an FFT plan needs before anything is allocated [major] — todo
+## HEPH-FFT-PLAN-REQUIREMENTS — Report what an FFT plan needs before anything is allocated [major] — in progress
+
+- Candidate evidence: 16 focused tests pass with a required WGPU device.
+  At 65,535 bytes, the query and both preparation methods reject the 65,536-byte
+  workspace with the same typed fields. At 65,536 bytes, the prepared transform
+  computes the impulse spectrum. Pure tests cover the 64/63 workgroup edge
+  and the 80,000-workgroup refusal. The Kwavers consumer check and public API
+  compatibility classification remain release gates.
 - Priority: feature.
 - milestone: M-compute-contracts. No exit check of the ladder fails without this item; whether it joins the ladder is for the next ladder revision.
 - basis: 0a4e22f133e2c392554d640fb2a5606f052388fc.
