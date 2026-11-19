@@ -63,7 +63,7 @@ tracing-subscriber = { version = "0.3", default-features = false, features = ["f
 syn = { version = "2.0.119", features = ["full", "visit"] }
 # Numeric/comparison provider requirements advance together (ADR 0086).
 # Use the published Aequitas and Eunomia registry identities.
-aequitas = { version = "0.4.0", default-features = false }
+aequitas = { version = "0.5.0", default-features = false }
 eunomia = { version = "0.12.1", default-features = false }
 # leto host-side layout metadata (shape/strides/offset + broadcast) reused as
 # the backend-agnostic indexing vocabulary per atlas ADR 0001. Layout/array
