@@ -1,6 +1,23 @@
 # Changelog
 
-## [0.28.0] - Unreleased
+## [0.29.0] - Unreleased
+
+### Breaking
+
+- [major] Move the six Rust libraries to Aequitas 0.4.0, Eunomia 0.12.1,
+  and Leto/Leto Ops 0.51.0. Migrate those provider requirements with the
+  Hephaestus dependencies wherever quantities, layout, or scalar types
+  cross the crate boundary.
+- [major] Import ROCm axis reductions from crate-root exports instead of
+  the removed public `axis_reduction` module.
+
+### Fixed
+
+- [patch] Correct overflow checks in WGPU scan and matrix tiling and in
+  ROCm product addressing. Keep the supported shape ranges verified by
+  their backend contracts.
+
+## [0.28.0] - 2026-10-26
 
 ### Fixed
 

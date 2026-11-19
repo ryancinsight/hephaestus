@@ -9,32 +9,27 @@ dependency edge.
 
 Conceptually, **Hephaestus is to the GPU what [`leto`](../leto) is to the CPU**. Much like `leto` serves as the non-differentiable CPU array vocabulary, `hephaestus` serves as the shared GPU buffer and compute substrate. It decouples high-level packages (such as `apollo` spectral transforms and `coeus` tensor backends) so they can share device contexts and memory allocations without direct dependencies, mirroring the role of **CuPy** in the Python (NumPy/SciPy) ecosystem.
 
-Hephaestus 0.22 follows the Eunomia 0.10 numeric cohort and Leto 0.46 layouts.
-Direct consumers advance those pre-1.0 provider requirements together; device
-operations and numerical contracts remain unchanged. Backend verification uses
-the committed Git graph without checkout-local path substitutions.
+Hephaestus 0.29 follows Eunomia 0.12.1, Aequitas 0.4, and Leto 0.51 layouts.
+Update those dependencies together when passing their values to Hephaestus.
+The registry release provides core, host, WGPU, CUDA, ROCm, and Metal.
 
 ## Naming
 
 Hephaestus is the god of the forge: the place where the stack's compute
 kernels are forged for accelerator hardware.
 
-## Depend on the facade
-
-`hephaestus-compute` is the entry crate (library name `hephaestus`). It
-re-exports the contract layer and each backend, so a consumer names one dependency rather than assembling sub-crates
-(atlas ADR 0037):
+## Install a backend
 
 ```toml
-# contracts only — compiles on a machine with no accelerator
-hephaestus-compute = "0.22"
-
-# portable compute; on macOS acquire WgpuDevice::try_metal
-hephaestus-compute = { version = "0.22", features = ["wgpu", "decomposition", "sparse"] }
-
-# NVIDIA; execution needs a driver and runtime kernel compilation needs NVRTC
-hephaestus-compute = { version = "0.22", features = ["cuda", "decomposition"] }
+hephaestus-core = "0.29.0"
+hephaestus-wgpu = "0.29.0"
 ```
+
+Use `hephaestus-core` by itself for device contracts. Choose
+`hephaestus-host`, `hephaestus-wgpu`, `hephaestus-cuda`, `hephaestus-rocm`,
+or `hephaestus-metal` for the execution environment. The workspace
+`hephaestus-compute` facade re-exports the same contracts and backends for
+source consumers (Atlas ADR 0037).
 
 No backend is enabled by default: a default backend would make every consumer of
 the traits pull a device stack. CUDA driver acquisition compiles without a
@@ -48,8 +43,7 @@ unavailable-device error each returns on a host without that hardware.
 
 Contracts appear at facade paths — `hephaestus::DeviceBuffer` — and backends
 under a module named for the device API: `hephaestus::wgpu`, `hephaestus::cuda`,
-`hephaestus::rocm`, `hephaestus::metal`. Sub-crates remain published so a
-consumer *can* take a narrower dependency; the facade is what it should reach for.
+`hephaestus::rocm`, `hephaestus::metal`. Registry consumers import the contract and backend items from the corresponding crates.
 
 ## Workspace
 
