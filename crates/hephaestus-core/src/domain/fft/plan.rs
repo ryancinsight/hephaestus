@@ -96,26 +96,7 @@ pub fn plan_fft_axes<T, B, const R: usize>(
 where
     B: DeviceBuffer<T>,
 {
-    if !(1..=3).contains(&R) {
-        return Err(invalid(format!(
-            "FFT rank {R} is unsupported; expected a rank from 1 through 3"
-        )));
-    }
-    if axes.is_empty() {
-        return Err(invalid("FFT transform axes must be nonempty"));
-    }
-    let mut active_axes = [false; R];
-    for &axis in axes {
-        let Some(active) = active_axes.get_mut(axis) else {
-            return Err(invalid(format!(
-                "FFT axis {axis} is out of range for rank {R}"
-            )));
-        };
-        if *active {
-            return Err(invalid(format!("FFT axis {axis} is duplicated")));
-        }
-        *active = true;
-    }
+    let active_axes = validate_axes::<R>(axes)?;
     if illegal_aliasing {
         return Err(invalid(
             "FFT real and imaginary components must use distinct buffers",
@@ -160,9 +141,63 @@ where
             operands.imaginary.buffer.len()
         )));
     }
+    finish_plan(real.shape(), elements, active_axes, direction)
+}
+
+/// Describe the dense, zero-offset shape and axes without operand storage.
+///
+/// # Errors
+/// Rejects unsupported rank, invalid axes, zero extents, and shape overflow.
+pub fn plan_fft_shape<const R: usize>(
+    shape: [usize; R],
+    direction: FftDirection,
+    axes: &[usize],
+) -> Result<FftPlan<R>> {
+    let active_axes = validate_axes(axes)?;
+    if shape.contains(&0) {
+        return Err(invalid("FFT transform extents must be nonzero"));
+    }
+    let elements = shape.into_iter().try_fold(1usize, |product, extent| {
+        product
+            .checked_mul(extent)
+            .ok_or_else(|| invalid("FFT shape element count overflows"))
+    })?;
+    finish_plan(shape, elements, active_axes, direction)
+}
+
+fn validate_axes<const R: usize>(axes: &[usize]) -> Result<[bool; R]> {
+    if !(1..=3).contains(&R) {
+        return Err(invalid(format!(
+            "FFT rank {R} is unsupported; expected a rank from 1 through 3"
+        )));
+    }
+    if axes.is_empty() {
+        return Err(invalid("FFT transform axes must be nonempty"));
+    }
+    let mut active_axes = [false; R];
+    for &axis in axes {
+        let Some(active) = active_axes.get_mut(axis) else {
+            return Err(invalid(format!(
+                "FFT axis {axis} is out of range for rank {R}"
+            )));
+        };
+        if *active {
+            return Err(invalid(format!("FFT axis {axis} is duplicated")));
+        }
+        *active = true;
+    }
+    Ok(active_axes)
+}
+
+fn finish_plan<const R: usize>(
+    shape: [usize; R],
+    elements: usize,
+    active_axes: [bool; R],
+    direction: FftDirection,
+) -> Result<FftPlan<R>> {
     let transform_elements = active_axes
         .iter()
-        .zip(real.shape())
+        .zip(shape)
         .filter_map(|(&active, extent)| active.then_some(extent))
         .try_fold(1usize, |product, extent| {
             product
@@ -171,7 +206,7 @@ where
         })?;
 
     Ok(FftPlan {
-        shape: real.shape(),
+        shape,
         elements,
         active_axes,
         transform_elements,

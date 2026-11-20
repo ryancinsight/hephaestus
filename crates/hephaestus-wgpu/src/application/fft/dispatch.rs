@@ -8,12 +8,12 @@ use crate::{
 };
 
 use super::{
-    kernel::FusedParams,
+    kernel::{FusedParams, WORKGROUP_SIZE},
     pipelines::FftPipelines,
     plan::{FftWorkspace, WgpuFftPlan},
     scalar::WgpuFftScalar,
     stages::RadixStages,
-    strategy::{Axis, AxisStrategy, ChirpData},
+    strategy::{Axis, AxisStrategy, ChirpData, fused_grid},
 };
 
 #[derive(Clone, Copy)]
@@ -23,7 +23,7 @@ pub(super) struct FftComponents<'a, T> {
 }
 
 fn grid(elements: usize) -> Result<DispatchGrid> {
-    DispatchGrid::covering_domain([elements, 1, 1], [256, 1, 1])
+    DispatchGrid::covering_domain([elements, 1, 1], [WORKGROUP_SIZE as usize, 1, 1])
 }
 
 fn product_grid(left: u32, right: u32) -> Result<DispatchGrid> {
@@ -239,8 +239,7 @@ impl<T: WgpuFftScalar> WgpuFftPlan<T> {
         })?;
         let pack = self.pack[axis.shader_index() as usize];
         let max_grid_x = device.inner().limits().max_compute_workgroups_per_dimension;
-        let grid_x = pack.batch_count.min(max_grid_x);
-        let grid_y = pack.batch_count.div_ceil(grid_x);
+        let [grid_x, grid_y] = fused_grid(pack.batch_count, max_grid_x);
         let params = FusedParams {
             n: pack.n,
             log2n: pack.n.trailing_zeros(),

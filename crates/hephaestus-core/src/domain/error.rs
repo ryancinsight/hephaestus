@@ -1,3 +1,5 @@
+use super::fft::{FftLimit, FftResource};
+
 /// Errors shared by every accelerator backend.
 ///
 /// Backend-specific failures are carried in the message of the matching
@@ -53,6 +55,18 @@ pub enum HephaestusError {
     InvalidConfiguration {
         /// Caller-facing detail.
         message: String,
+    },
+    /// A Fourier transform's required resource exceeds a device ceiling.
+    #[error("FFT {resource} requires {required}, exceeding device {limiting_quantity}={limit}")]
+    FftCapacityExceeded {
+        /// Resource that could not fit.
+        resource: FftResource,
+        /// Quantity required by the selected strategy.
+        required: u64,
+        /// Inclusive device ceiling in the same units.
+        limit: u64,
+        /// Which limit supplies the units and ceiling.
+        limiting_quantity: FftLimit,
     },
     /// A device-to-host or host-to-device transfer failure.
     #[error("device transfer failed: {message}")]

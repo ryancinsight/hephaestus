@@ -1,5 +1,13 @@
 # Gap Audit - hephaestus
 
+## Aequitas 0.5 FFT capacity provider [major]
+
+Kwavers uses the typed resource preflight added in 0.31.0. The 0.31.0
+archives use Leto 0.51 and Aequitas 0.4. The checked 0.32.0 candidate
+uses the same sizing path with the registry Leto 0.52 and Aequitas 0.5
+providers. A compile check against 0.30.0 reproduces the missing method
+and typed error variant.
+
 ## [HEPH-EUNOMIA-010-COHORT] Default-source graph [minor]
 
 - Finding: default numeric providers advance beyond the 0.21 consumer's 0.9/0.2 requirements. The 0.22 candidate aligns Eunomia 0.10, Aequitas 0.3, Leto 0.46 and Moirai-sync 0.9.3 without altering Rust sources.

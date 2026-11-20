@@ -1,5 +1,12 @@
 # Backlog — hephaestus
 
+## FFT resource preflight on Aequitas 0.5 [major]
+
+- Verify Core, WGPU, and CUDA 0.32.0 with the published Leto 0.52 and
+  Aequitas 0.5 providers before using the typed error in Kwavers.
+- Acceptance includes the 65,535 and 65,536 byte device limit boundaries,
+  a normalized archive for each crate, and a fresh registry consumer.
+
 <a id="heph-eunomia-010-cohort"></a>
 ## HEPH-EUNOMIA-010-COHORT — restore provider compatibility [minor] — blocked
 
