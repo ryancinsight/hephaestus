@@ -33,3 +33,14 @@ ROCm adapterless checks, and publish Core before its consumers. WGPU
 precedes Metal. Exercise the published Core and Host together with Leto
 Ops on a typed finite-difference stencil. Report hardware coverage
 from the actual CI jobs.
+
+## Aequitas 0.5 and Leto 0.52
+
+Hephaestus 0.30.0 advances exchanged physical quantities to Aequitas
+0.5.0 and array layouts to Leto 0.52.0 with Eunomia 0.12.1. Select
+these versions together when moving values between a backend and
+its caller. The six backend and core archives match merge commit
+`2cb352c52b0a908ef343dd3844248a372ac6506d` and their crates.io
+checksums. The release API check compares against 0.29.0. Native
+Metal, software WGPU, and adapterless CUDA and ROCm checks pass.
+[Release workflow](https://github.com/ryancinsight/hephaestus/actions/runs/44781764295).
