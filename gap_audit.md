@@ -7,6 +7,12 @@ The 0.31.0 compatibility line carries the original shared sizing patch and
 preserves a single provider type across WGPU and CUDA consumers. See
 [ADR 0090](docs/adr/0090-fft-resource-preflight.md) for the boundary tests.
 
+Crates.io serves checksummed 0.31.0 archives from `3068b88d2ac14aa1202ece637c1b849fb6f90130`.
+Local verification passes 499 tests, including the WGPU device boundary.
+An independent fresh registry consumer confirms the 65,535-byte rejection
+and the exact 65,536-byte acceptance, then checks the impulse spectrum.
+
+
 ## [HEPH-EUNOMIA-010-COHORT] Default-source graph [minor]
 
 - Finding: default numeric providers advance beyond the 0.21 consumer's 0.9/0.2 requirements. The 0.22 candidate aligns Eunomia 0.10, Aequitas 0.3, Leto 0.46 and Moirai-sync 0.9.3 without altering Rust sources.

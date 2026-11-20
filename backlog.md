@@ -913,7 +913,7 @@ status ledger that stood here is program history; recover any entry with
 
 <a id="heph-fft-plan-requirements"></a>
 
-## HEPH-FFT-PLAN-REQUIREMENTS — Report what an FFT plan needs before anything is allocated [major] — in progress
+## HEPH-FFT-PLAN-REQUIREMENTS — Report what an FFT plan needs before anything is allocated [major] — done
 - Priority: feature.
 - milestone: M-compute-contracts. No exit check of the ladder fails without this item; whether it joins the ladder is for the next ladder revision.
 - basis: 0a4e22f133e2c392554d640fb2a5606f052388fc.

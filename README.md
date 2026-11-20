@@ -9,9 +9,11 @@ dependency edge.
 
 Conceptually, **Hephaestus is to the GPU what [`leto`](../leto) is to the CPU**. Much like `leto` serves as the non-differentiable CPU array vocabulary, `hephaestus` serves as the shared GPU buffer and compute substrate. It decouples high-level packages (such as `apollo` spectral transforms and `coeus` tensor backends) so they can share device contexts and memory allocations without direct dependencies, mirroring the role of **CuPy** in the Python (NumPy/SciPy) ecosystem.
 
-Hephaestus 0.29 follows Eunomia 0.12.1, Aequitas 0.4, and Leto 0.51 layouts.
-Update those dependencies together when passing their values to Hephaestus.
-The registry release provides core, host, WGPU, CUDA, ROCm, and Metal.
+The 0.31 compatibility release provides the core, WGPU, and CUDA packages
+for Eunomia 0.12.1, Aequitas 0.4, and Leto 0.51. Update those dependencies
+together when passing their values to Hephaestus.
+[ADR 0090](docs/adr/0090-fft-resource-preflight.md) defines FFT capacity
+checking and the new exhaustive error variant.
 
 ## Naming
 
@@ -21,8 +23,8 @@ kernels are forged for accelerator hardware.
 ## Install a backend
 
 ```toml
-hephaestus-core = "0.29.0"
-hephaestus-wgpu = "0.29.0"
+hephaestus-core = "0.31.0"
+hephaestus-wgpu = "0.31.0"
 ```
 
 Use `hephaestus-core` by itself for device contracts. Choose
