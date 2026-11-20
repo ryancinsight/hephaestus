@@ -1,7 +1,7 @@
 use eunomia::Pod;
 use hephaestus_core::{
-    BlockWidth, CombineExpr, ComputeDevice, CudaC, DeviceBuffer, DialectScalar, HephaestusError,
-    IdentityToken, OpIdentity, Result, reduction_pass_count, validate_reduction_width,
+    BlockWidth, CombineExpr, ComputeDevice, CudaC, DeviceBuffer, DialectScalar, IdentityToken,
+    OpIdentity, Result, reduction_pass_count, validate_reduction_width,
 };
 
 use crate::CudaDevice;
@@ -53,7 +53,7 @@ where
 
             let res = (device.driver().memory.copy)(out.raw(), input.raw(), bytes);
             if res != 0 {
-                return Err(HephaestusError::TransferFailed {
+                return Err(hephaestus_core::HephaestusError::TransferFailed {
                     message: format!("cuMemcpyDtoD_v2 failed with code: {res}"),
                 });
             }
