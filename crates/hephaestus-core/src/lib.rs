@@ -80,7 +80,10 @@ pub use domain::embedding::{
 };
 pub use domain::error::{HephaestusError, Result};
 pub use domain::fdtd::{Fdtd3dOps, Fdtd3dParams, FdtdMedium, FdtdVelocity};
-pub use domain::fft::{FftDirection, FftOperands, FftOps, FftPlan, plan_fft, plan_fft_axes};
+pub use domain::fft::{
+    FftDirection, FftLimit, FftOperands, FftOps, FftPlan, FftResource, plan_fft, plan_fft_axes,
+    plan_fft_shape,
+};
 pub use domain::fixed_fd::{FixedFd3DOps, FixedFd3DParams, FixedFd3DScheme};
 pub use domain::fusion::{
     FUSION_WORKGROUP_WIDTH, FusedElementwiseOps, FusedExpression, FusedReduction,

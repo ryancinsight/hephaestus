@@ -1,6 +1,6 @@
 [package]
 name = "hephaestus-cuda"
-version.workspace = true
+version = "0.31.0"
 rust-version.workspace = true
 edition.workspace = true
 authors.workspace = true

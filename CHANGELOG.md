@@ -1,5 +1,19 @@
 # Changelog
 
+## [0.31.0] — Aequitas 0.4 compatibility release
+
+### Breaking
+
+- [major] Add `HephaestusError::FftCapacityExceeded` with the limit,
+  required amount, and resource name. Exhaustive matches must handle the
+  new variant. Update the core, WGPU, and CUDA package versions together.
+
+### Added
+
+- [minor] Check FFT shape and device limits before allocating operands.
+  WGPU preparation uses the same sizing logic as the requirements query.
+  See [ADR 0090](docs/adr/0090-fft-resource-preflight.md).
+
 ## [0.29.0] - Unreleased
 
 ### Breaking

@@ -7,9 +7,11 @@ mod pipelines;
 mod plan;
 mod scalar;
 mod seam;
+mod sizing;
 mod stages;
 mod strategy;
 mod twiddle;
 
 pub use scalar::WgpuFftScalar;
 pub use seam::{WgpuFftOps, WgpuPreparedFft};
+pub use sizing::WgpuFftRequirements;

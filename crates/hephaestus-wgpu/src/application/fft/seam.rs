@@ -1,5 +1,6 @@
 use hephaestus_core::{
     FftDirection, FftOperands, FftOps, HephaestusError, Result, plan_fft, plan_fft_axes,
+    plan_fft_shape,
 };
 
 use crate::application::prepared::{device_owner, validate_device_owner};
@@ -7,13 +8,35 @@ use crate::infrastructure::device::PipelineCache;
 use crate::infrastructure::{buffer::WgpuBuffer, device::WgpuDevice};
 use crate::{WgpuCommandStream, WgpuGroupedSequence};
 
-use super::{plan::WgpuFftPlan, scalar::WgpuFftScalar};
+use super::{
+    plan::WgpuFftPlan,
+    scalar::WgpuFftScalar,
+    sizing::{Sizing, WgpuFftRequirements},
+};
 
 /// WGPU implementation of the device-neutral dense complex FFT seam.
 #[derive(Clone, Copy, Debug, Default)]
 pub struct WgpuFftOps;
 
 impl WgpuFftOps {
+    /// Report the exact plan requirements using the selected scalar and device.
+    /// Computes strategy and capacities without allocating buffers or shaders.
+    ///
+    /// # Errors
+    /// Rejects invalid shapes, axes, or scalar capabilities. A device ceiling
+    /// failure carries the resource, required value, and inclusive limit
+    /// returned by preparation for the same shape and axes.
+    pub fn requirements<T: WgpuFftScalar, const R: usize>(
+        &self,
+        device: &WgpuDevice,
+        shape: [usize; R],
+        axes: &[usize],
+    ) -> Result<WgpuFftRequirements> {
+        T::validate_fft_capability(device)?;
+        let plan = plan_fft_shape(shape, FftDirection::Forward, axes)?;
+        Ok(Sizing::for_device::<T, R>(device, &plan)?.requirements)
+    }
+
     fn prepare<T: WgpuFftScalar, const R: usize>(
         device: &WgpuDevice,
         operands: FftOperands<'_, WgpuBuffer<T>, R>,
@@ -34,7 +57,6 @@ impl WgpuFftOps {
         } else {
             plan_fft::<T, _, R>(&operands, direction, aliases)?
         };
-        logical.validate_address_limit(u32::MAX as usize)?;
         Ok(WgpuPreparedFft {
             plan: WgpuFftPlan::new(
                 device,

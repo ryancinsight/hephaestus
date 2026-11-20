@@ -1,5 +1,12 @@
 # Gap Audit - hephaestus
 
+## FFT capacity on Aequitas 0.4
+
+The published 0.29.0 packages lack the approved typed FFT sizing query.
+The 0.31.0 compatibility line carries the original shared sizing patch and
+preserves a single provider type across WGPU and CUDA consumers. See
+[ADR 0090](docs/adr/0090-fft-resource-preflight.md) for the boundary tests.
+
 ## [HEPH-EUNOMIA-010-COHORT] Default-source graph [minor]
 
 - Finding: default numeric providers advance beyond the 0.21 consumer's 0.9/0.2 requirements. The 0.22 candidate aligns Eunomia 0.10, Aequitas 0.3, Leto 0.46 and Moirai-sync 0.9.3 without altering Rust sources.

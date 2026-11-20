@@ -913,7 +913,7 @@ status ledger that stood here is program history; recover any entry with
 
 <a id="heph-fft-plan-requirements"></a>
 
-## HEPH-FFT-PLAN-REQUIREMENTS — Report what an FFT plan needs before anything is allocated [major] — todo
+## HEPH-FFT-PLAN-REQUIREMENTS — Report what an FFT plan needs before anything is allocated [major] — in progress
 - Priority: feature.
 - milestone: M-compute-contracts. No exit check of the ladder fails without this item; whether it joins the ladder is for the next ladder revision.
 - basis: 0a4e22f133e2c392554d640fb2a5606f052388fc.
@@ -923,7 +923,7 @@ status ledger that stood here is program history; recover any entry with
 - Outcome: a public query takes a device, a shape, the active axes and the scalar type, and returns what the plan needs (each buffer with its bytes, and the dispatch workgroups) or a typed refusal that carries the quantity that exceeds, its value and the limit. It allocates nothing and is computed by the code `WgpuFftPlan::new` uses. `prepare_fft` and `prepare_fft_axes` return the same typed refusal.
 - Acceptance: an `f32` 17x16x16 plan needs a workspace of 65536 bytes; with a `max_buffer_size` of 65536 the query admits it and the plan prepares, and with 65535 the query and `prepare_fft` both return the refusal naming the workspace, 65536 bytes and 65535. The same boundary holds for the dispatch: admitted where `max_compute_workgroups_per_dimension` equals the workgroups the workspace needs, refused one below, naming the dispatch and both values (as a device test where a device with that limit can be acquired, otherwise on the sizing function with the limit as its argument). A 200x200x200 plan at a limit of 65535 workgroups is refused naming 80000. The SemVer comparison classifies the error change.
 - Observed in kwavers at this plan code (the file is unchanged between the revision kwavers locks, 72ffa0577952411a27182782637248a2c8a02ead, and the basis), on one host with an adapter. By the integrator of ryancinsight/kwavers#1059: a 200x200x200 request was refused with "FFT dispatch requires 80000 x workgroups, exceeding device max_compute_workgroups_per_dimension=65535". By the judge of that pull request, relayed from its comment 6814685775: a 17x16x16 plan at a `max_buffer_size` of 61440 was refused with "FFT workspace requires 65536 bytes, exceeding device max_buffer_size=61440". Derived from the shapes: 17 is not a power of two, m = 64, and 64 x 256 lines x 4 bytes = 65536; 200 gives m = 512, and 512 x 40000 lines / 256 = 80000.
-- Needs: none. Next step: draft the ADR for the error shape (a new variant of `HephaestusError` or a field on an existing one; either is a break), then extract the sizing from `WgpuFftPlan::new` into the query.
+- Delivery: [ADR 0090](docs/adr/0090-fft-resource-preflight.md) owns the typed refusal and shared sizing. The [0.31.0 checklist](checklist.md) tracks compatibility validation and publication.
 
 <a id="heph-semver-baseline-028"></a>
 ## HEPH-SEMVER-BASELINE-028 — Release the Leto 0.51 accelerator boundary in Hephaestus 0.29.0 [major] — todo
