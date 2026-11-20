@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.30.0] - Unreleased
+
+### Breaking
+
+- [major] Public GPU buffer and layout contracts share Leto 0.52.0.
+  Typed accelerator quantities use Aequitas 0.5.0. Update callers that
+  exchange quantities or array layouts across the provider boundary.
+
 ## [0.29.0] - Unreleased
 
 ### Breaking
