@@ -708,7 +708,7 @@ dependencies = [
 [[package]]
 name = "hermes-simd"
 version = "0.10.0"
-source = "git+https://github.com/ryancinsight/hermes.git#a65c6c2471f31ae4f836fb4fcf8dc52c5f3b3fe2"
+source = "git+https://github.com/ryancinsight/hermes.git#d95d1cbf894e54ed679416181020764fc9a181b6"
 dependencies = [
  "eunomia",
  "hermes-simd-core",
@@ -722,7 +722,7 @@ dependencies = [
 [[package]]
 name = "hermes-simd-core"
 version = "0.10.0"
-source = "git+https://github.com/ryancinsight/hermes.git#a65c6c2471f31ae4f836fb4fcf8dc52c5f3b3fe2"
+source = "git+https://github.com/ryancinsight/hermes.git#d95d1cbf894e54ed679416181020764fc9a181b6"
 dependencies = [
  "eunomia",
  "mnemosyne-memory",
@@ -733,7 +733,7 @@ dependencies = [
 [[package]]
 name = "hermes-simd-intrinsics"
 version = "0.10.0"
-source = "git+https://github.com/ryancinsight/hermes.git#a65c6c2471f31ae4f836fb4fcf8dc52c5f3b3fe2"
+source = "git+https://github.com/ryancinsight/hermes.git#d95d1cbf894e54ed679416181020764fc9a181b6"
 dependencies = [
  "eunomia",
  "hermes-simd-core",
@@ -743,7 +743,7 @@ dependencies = [
 [[package]]
 name = "hermes-simd-macros"
 version = "0.9.0"
-source = "git+https://github.com/ryancinsight/hermes.git#a65c6c2471f31ae4f836fb4fcf8dc52c5f3b3fe2"
+source = "git+https://github.com/ryancinsight/hermes.git#d95d1cbf894e54ed679416181020764fc9a181b6"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -753,7 +753,7 @@ dependencies = [
 [[package]]
 name = "hermes-simd-types"
 version = "0.10.0"
-source = "git+https://github.com/ryancinsight/hermes.git#a65c6c2471f31ae4f836fb4fcf8dc52c5f3b3fe2"
+source = "git+https://github.com/ryancinsight/hermes.git#d95d1cbf894e54ed679416181020764fc9a181b6"
 dependencies = [
  "hermes-simd-core",
  "hermes-simd-intrinsics",
@@ -813,7 +813,7 @@ checksum = "20870f649af7073d53e38067b2a84312175d56ea15217e1b15bc83506ec50afb"
 [[package]]
 name = "leto"
 version = "0.52.0"
-source = "git+https://github.com/ryancinsight/leto.git#31334bd0428b6363b7b94a2f5abd58616a80b3bd"
+source = "git+https://github.com/ryancinsight/leto.git#a98b8a706b6644bdd28c9fd5680c2dc044bb2b67"
 dependencies = [
  "aequitas",
  "eunomia",
@@ -825,7 +825,7 @@ dependencies = [
 [[package]]
 name = "leto-ops"
 version = "0.52.0"
-source = "git+https://github.com/ryancinsight/leto.git#31334bd0428b6363b7b94a2f5abd58616a80b3bd"
+source = "git+https://github.com/ryancinsight/leto.git#a98b8a706b6644bdd28c9fd5680c2dc044bb2b67"
 dependencies = [
  "eunomia",
  "hermes-simd",
