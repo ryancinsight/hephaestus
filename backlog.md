@@ -1,5 +1,15 @@
 # Backlog — hephaestus
 
+<a id="hephaestus-stable-qualification"></a>
+## HEPHAESTUS-STABLE-QUALIFICATION — hephaestus stable-release qualification [patch] — todo
+- priority: verification; milestone: M-backend-parity; basis: `19b15aeeedc4`.
+- Outcome: Qualify the device seams that downstream solvers and tensors call. Follow the [release scope](docs/adr/0088-release-scope-1-0.md) and [milestone exits](backlog/milestones.md).
+- Representative manifest `hephaestus-core 0.30.0`. Target 1.0.0.
+- [ ] [patch] Run the existing Metal conformance suite alongside the host reference. Record adapter identity, actual kernel execution, values and explicit rejection cases for each tested operation.
+- [ ] [arch] Reconcile the shape/indexing, pooling and unfold/fold requirements with Coeus before extending the device seam. Require the provider design review, then test native vendor implementations against one value contract.
+- [ ] [major] Close compute-contract and backend-parity milestones. Attach CUDA, ROCm, Metal and WGPU results where required, including the disposition of unavailable hardware and the fresh downstream build.
+- [ ] [patch] Attach exact-revision evidence for the local exits and this member’s [Atlas qualification criteria](https://github.com/ryancinsight/atlas/blob/17b0124a7548ad81e817284afc5cb115c1d1bc78/docs/parity/repositories.json).
+
 <a id="heph-eunomia-010-cohort"></a>
 ## HEPH-EUNOMIA-010-COHORT — restore provider compatibility [minor] — blocked
 
