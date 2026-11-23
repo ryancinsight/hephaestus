@@ -13,7 +13,7 @@
 - [ ] [major] Block 1.0 until every critical feature is fully implemented through the supported product path. Map each critical requirement, including buffer, dispatch and numerical contracts on each supported backend, to implementation and passing acceptance evidence on the release candidate. Any missing implementation or required result keeps this item open.
 - [ ] [major] **1.0.0-beta.1 → 1.0.0-rc.1 → 1.0.0.** Freeze the supported surface at beta. An independent downstream solver executes a real kernel from the candidate package and reproduces the host result within the operation’s bound. Repeat the applicable exits on the exact RC before stable promotion. Attach exact-revision evidence for the local exits and this member’s [Atlas qualification criteria](https://github.com/ryancinsight/atlas/blob/17b0124a7548ad81e817284afc5cb115c1d1bc78/docs/parity/repositories.json).
 
-- [ ] [major] Release Metal and ROCm 0.32.0 after package, API and backend verification. Check both registry checksums, source revisions and a single Core identity in a fresh Coeus consumer before closing the migration.
+- [x] [major] Verify the [Metal and ROCm 0.32.0 archives](gap_audit.md#metal-and-rocm-0320-publication), then rebuild Coeus on one published Core identity. Retain actual AMD device execution as an open V1 backend-parity exit.
 - [x] [patch] Verify the published hephaestus-core, hephaestus-wgpu, hephaestus-cuda 0.32.0 source and run a downstream value test. [Archive and consumer evidence](gap_audit.md#incremental-release-baseline).
 
 <a id="heph-eunomia-010-cohort"></a>

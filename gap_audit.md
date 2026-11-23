@@ -12,7 +12,18 @@ The reconciled tree includes [the published source](https://github.com/ryancinsi
 
 16 selected Core/WGPU FFT tests passed. Kwavers executed four real-device allocation boundary tests and one requested-output simulation on the native WGPU adapter. [Consumer test at the reviewed revision](https://github.com/ryancinsight/kwavers/blob/a949d8d429fa3965d3ae500958c58d512bdce41f/crates/kwavers-gpu/src/pstd_gpu/tests/capacity.rs). A new external Cargo project resolved all five released provider crates from crates.io, with one Aequitas 0.5.0, Eunomia 0.12.1 and Leto 0.52.0. It checked typed time admission, both elastic moduli and FFT axis products, including invalid inputs.
 
-Apollo and Coeus require the older 0.30 Git line. The newer archive is outside that dependency range. The existing locks identify the old commits. Fresh unpinned Git consumers need a compatible, explicitly selected source before switching the default provider. Coeus WGPU passes all eight storage and device tests on 0.32.0. Compiling Coeus ROCm against the mixed registry cohort fails with E0277 because its device implements the Core 0.30 trait. Both [Metal 0.30.0](https://crates.io/crates/hephaestus-metal/0.30.0/dependencies) and [ROCm 0.30.0](https://crates.io/crates/hephaestus-rocm/0.30.0/dependencies) depend on Core 0.30. Coeus needs one compatible trait identity across its supported adapters. The approved migration selects Metal and ROCm 0.32.0. Only these two packages need new registry entries. Core, WGPU and CUDA keep their existing 0.32.0 receipts.
+The previous Coeus graph mixed Core 0.32.0 with Metal and ROCm built on Core 0.30.0. The ROCm device failed the shared trait bound (E0277). [Apollo](https://github.com/ryancinsight/apollo/pull/728) and [Coeus](https://github.com/ryancinsight/Coeus/pull/690) resolve only the published Core 0.32.0 in clean external callers pinned to the verified Apollo merge and Coeus candidate `f649930c49da`.
+
+### Metal and ROCm 0.32.0 publication
+
+Both registry archives identify the verified [release source](https://github.com/ryancinsight/hephaestus/commit/473c8caa552a0713c404ad9924a042c9affc1aa8). Each non-yanked index checksum matches the downloaded crate. The normalized manifests select Core 0.32.0 and Metal also selects WGPU 0.32.0.
+
+| Crate | Published SHA-256 | Package-authored files verified |
+| --- | --- | ---: |
+| [hephaestus-metal 0.32.0](https://github.com/ryancinsight/hephaestus/releases/tag/crate-hephaestus-metal-v0.32.0) | `33cf59b465dc4f1e3c9ce47c8ba85f2e4c780b657335c61f8107cae7dbf393f6` | 144 |
+| [hephaestus-rocm 0.32.0](https://github.com/ryancinsight/hephaestus/releases/tag/crate-hephaestus-rocm-v0.32.0) | `0af8829be91d7ca939b40907f0862648083d0d64ee2c93589ee317255510afb0` | 220 |
+
+Both default APIs passed 223 patch-level compatibility checks against 0.30.0. The 142 Metal and 218 ROCm source, kernel, build and test files match the previous archives byte for byte. On Apple silicon, 102 provider tests passed with Metal device acquisition required. ROCm passed 89 portable tests and the Linux SDK/adapterless workflow. AMD hardware execution remains open for that target’s V1 qualification. The Coeus workspace and all targets compile against the published graph with one device trait identity.
 
 The next [patch] checkpoint uses [sparse](crates/hephaestus-metal/tests/contract/sparse.rs). [Target version and acceptance criteria](backlog.md#hephaestus-stable-qualification).
 
