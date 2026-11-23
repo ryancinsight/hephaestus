@@ -1,5 +1,13 @@
 # Gap Audit - hephaestus
 
+## Incremental release baseline
+
+Reviewed [hephaestus-core 0.30.0](crates/hephaestus-core/Cargo.toml) at [7c69a77ce628](https://github.com/ryancinsight/hephaestus/tree/7c69a77ce6285805fb1698afdab3bc7671bd8f70). The exact version appears in the [registry](https://crates.io/crates/hephaestus-core/0.30.0). The newer [0.32.0](https://crates.io/crates/hephaestus-core/0.32.0) archive identifies source `fc9fba13e0edcaea4f322d709dfd4d292fb770cc`. Its SHA-256 `f677bdf080c40a9bf8b85c0f0b5efee81a6f8dc957b7eb6134a5e906a97dc1f0` matches the index. The release source and reviewed branch diverge. The archive side has 2 unique commits and the default branch has two. Reconcile both sides and replay the consumer before allocating another version. [Compare revisions](https://github.com/ryancinsight/hephaestus/compare/7c69a77ce6285805fb1698afdab3bc7671bd8f70...fc9fba13e0edcaea4f322d709dfd4d292fb770cc).
+
+The next [patch] checkpoint uses [sparse](crates/hephaestus-metal/tests/contract/sparse.rs). [Target version and acceptance criteria](backlog.md#hephaestus-stable-qualification).
+
+The Atlas board check reports 4 existing schema findings, including `HEPHAESTUS-SCAN-LETO-001`. Verify each item against its delivery evidence, archive completed work and rerun the board check before the freeze.
+
 ## [HEPH-EUNOMIA-010-COHORT] Default-source graph [minor]
 
 - Finding: default numeric providers advance beyond the 0.21 consumer's 0.9/0.2 requirements. The 0.22 candidate aligns Eunomia 0.10, Aequitas 0.3, Leto 0.46 and Moirai-sync 0.9.3 without altering Rust sources.
