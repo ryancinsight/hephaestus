@@ -3,14 +3,17 @@
 <a id="hephaestus-stable-qualification"></a>
 ## HEPHAESTUS-STABLE-QUALIFICATION — hephaestus stable-release qualification [patch] — todo
 - priority: verification; milestone: M-backend-parity; basis: `7c69a77ce628`.
-- Outcome: Qualify the device seams that downstream solvers and tensors call. Follow the [release scope](docs/adr/0088-release-scope-1-0.md) and [milestone exits](backlog/milestones.md). Planning targets for `hephaestus-core` are 0.32.1 after source reconciliation, then 0.33.0 proposed for reviewed backend additions, then 1.0.0. Verification alone can advance the current version.
-- Representative manifest `hephaestus-core 0.30.0`. Target 1.0.0.
+- Outcome: Qualify the device seams that downstream solvers and tensors call. Follow the [release scope](docs/adr/0088-release-scope-1-0.md) and [milestone exits](backlog/milestones.md). Planning targets for `hephaestus-core` are 0.32.1, then 0.33.0 proposed for reviewed backend additions, then 1.0.0. Verification alone can advance the current version.
+- Representative manifest `hephaestus-core 0.32.0`. Target 1.0.0.
 - [ ] [patch] Run the existing Metal conformance suite alongside the host reference. Record adapter identity, actual kernel execution, values and explicit rejection cases for each tested operation.
 - [ ] [arch] Reconcile the shape/indexing, pooling and unfold/fold requirements with Coeus before extending the device seam. Require the provider design review, then test native vendor implementations against one value contract.
 - [ ] [major] Close compute-contract and backend-parity milestones. Attach CUDA, ROCm, Metal and WGPU results where required, including the disposition of unavailable hardware and the fresh downstream build.
-- [ ] [patch] **0.32.1 after source reconciliation.** Recover the 0.32.0 archive source and compare its public API and backend feature graph with default-branch 0.30.0. Replay one sparse operation on Metal with CPU reference values and an invalid shape. [Source and baseline](gap_audit.md#incremental-release-baseline).
+- [ ] [patch] **0.32.1.** Replay one sparse operation on Metal with CPU reference values and an invalid shape. [Source and baseline](gap_audit.md#incremental-release-baseline).
 - [ ] [minor] **0.33.0 proposed for reviewed backend additions.** Select the required Coeus or Athena operation after provider review. Run the same shape, expected values and rejection case on each claimed vendor backend, recording actual adapter and execution.
+- [ ] [major] Block 1.0 until every critical feature is fully implemented through the supported product path. Map each critical requirement, including buffer, dispatch and numerical contracts on each supported backend, to implementation and passing acceptance evidence on the release candidate. Any missing implementation or required result keeps this item open.
 - [ ] [major] **1.0.0-beta.1 → 1.0.0-rc.1 → 1.0.0.** Freeze the supported surface at beta. An independent downstream solver executes a real kernel from the candidate package and reproduces the host result within the operation’s bound. Repeat the applicable exits on the exact RC before stable promotion. Attach exact-revision evidence for the local exits and this member’s [Atlas qualification criteria](https://github.com/ryancinsight/atlas/blob/17b0124a7548ad81e817284afc5cb115c1d1bc78/docs/parity/repositories.json).
+
+- [x] [patch] Verify the published hephaestus-core, hephaestus-wgpu, hephaestus-cuda 0.32.0 source and run a downstream value test. [Archive and consumer evidence](gap_audit.md#incremental-release-baseline).
 
 <a id="heph-eunomia-010-cohort"></a>
 ## HEPH-EUNOMIA-010-COHORT — restore provider compatibility [minor] — blocked

@@ -1,20 +1,16 @@
 //! WGPU planning and provider-owned storage for dense complex FFTs.
 
 use eunomia::Zeroable;
-use hephaestus_core::{
-    ComputeDevice, DeviceLimits, FftDirection, FftPlan, HephaestusError, Result,
-};
+use hephaestus_core::{ComputeDevice, FftDirection, FftPlan, Result};
 
 use crate::infrastructure::{buffer::WgpuBuffer, device::WgpuDevice};
 
 use super::{
     chirp::{chirp_angle, forward_radix_two},
-    kernel::{
-        ChirpParams, FUSED_MAX_LENGTH, FUSED_WORKGROUP_SIZE, FUSED_WORKGROUP_STORAGE_BYTES,
-        PackParams, WORKGROUP_SIZE,
-    },
+    kernel::{ChirpParams, PackParams},
     pipelines::FftPipelines,
     scalar::WgpuFftScalar,
+    sizing::{Sizing, dimension},
     stages::RadixStages,
     strategy::{Axis, AxisStrategy, ChirpData},
     twiddle::{build_fused_twiddle, build_radix_twiddle, radix_parameters, try_host_vector},
@@ -36,210 +32,6 @@ pub(crate) struct WgpuFftPlan<T> {
 pub(crate) struct FftWorkspace<T> {
     pub(crate) real: WgpuBuffer<T>,
     pub(crate) imaginary: WgpuBuffer<T>,
-}
-
-fn invalid(message: impl Into<String>) -> HephaestusError {
-    HephaestusError::InvalidConfiguration {
-        message: message.into(),
-    }
-}
-
-fn next_power_of_two(n: usize) -> Result<usize> {
-    let mut power = 1usize;
-    while power < n {
-        power = power.checked_mul(2).ok_or_else(|| {
-            invalid(format!(
-                "FFT length {n} cannot be rounded to a power of two"
-            ))
-        })?;
-    }
-    Ok(power)
-}
-
-fn axis_strategy_for(n: usize) -> Result<AxisStrategy> {
-    if n.is_power_of_two() {
-        return Ok(AxisStrategy::StagedRadix2);
-    }
-    let convolution_len = n
-        .checked_mul(2)
-        .and_then(|value| value.checked_sub(1))
-        .ok_or_else(|| {
-            invalid(format!(
-                "Bluestein convolution length overflows for axis {n}"
-            ))
-        })?;
-    Ok(AxisStrategy::ChirpZ {
-        n,
-        m: next_power_of_two(convolution_len)?,
-    })
-}
-
-fn select_fused_strategy(
-    strategy: AxisStrategy,
-    axis_len: usize,
-    batch_count: u32,
-    limits: DeviceLimits,
-    max_workgroups_per_dimension: u32,
-) -> AxisStrategy {
-    let grid_capacity = u64::from(max_workgroups_per_dimension)
-        .saturating_mul(u64::from(max_workgroups_per_dimension));
-    if matches!(strategy, AxisStrategy::StagedRadix2)
-        && axis_len > 1
-        && axis_len <= FUSED_MAX_LENGTH
-        && limits.max_compute_workgroup_size_x >= FUSED_WORKGROUP_SIZE
-        && limits.max_compute_invocations_per_workgroup >= FUSED_WORKGROUP_SIZE
-        && limits.max_compute_workgroup_storage_size >= FUSED_WORKGROUP_STORAGE_BYTES
-        && u64::from(batch_count) <= grid_capacity
-    {
-        AxisStrategy::FusedRadix2
-    } else {
-        strategy
-    }
-}
-
-fn select_axis_strategy(
-    active: bool,
-    axis_len: usize,
-    batch_count: u32,
-    limits: DeviceLimits,
-    max_workgroups_per_dimension: u32,
-) -> Result<AxisStrategy> {
-    if !active || axis_len == 1 {
-        return Ok(AxisStrategy::Identity);
-    }
-    Ok(select_fused_strategy(
-        axis_strategy_for(axis_len)?,
-        axis_len,
-        batch_count,
-        limits,
-        max_workgroups_per_dimension,
-    ))
-}
-
-fn dimension(value: usize, name: &str) -> Result<u32> {
-    u32::try_from(value)
-        .map_err(|_| invalid(format!("FFT {name}={value} exceeds the shader u32 domain")))
-}
-
-fn axis_workspace_elements(
-    dimensions: [usize; 3],
-    axis: Axis,
-    strategy: AxisStrategy,
-) -> Result<Option<usize>> {
-    if axis.len(dimensions) == 1 {
-        return Ok(None);
-    }
-    let transform_len = match strategy {
-        AxisStrategy::Identity | AxisStrategy::FusedRadix2 => return Ok(None),
-        AxisStrategy::StagedRadix2 => axis.len(dimensions),
-        AxisStrategy::ChirpZ { m, .. } => m,
-    };
-    transform_len
-        .checked_mul(
-            axis.batch_count(dimensions)
-                .ok_or_else(|| invalid("FFT axis batch count overflows"))?,
-        )
-        .ok_or_else(|| {
-            invalid(format!(
-                "FFT workspace element count overflows for {axis:?}"
-            ))
-        })
-        .map(Some)
-}
-
-fn radix_root_length(dimensions: [usize; 3], strategies: [AxisStrategy; 3]) -> usize {
-    strategies
-        .into_iter()
-        .enumerate()
-        .filter_map(|(index, strategy)| match strategy {
-            AxisStrategy::Identity | AxisStrategy::FusedRadix2 => None,
-            AxisStrategy::StagedRadix2 => Some(dimensions[index]),
-            AxisStrategy::ChirpZ { m, .. } => Some(m),
-        })
-        .max()
-        .unwrap_or(0)
-}
-
-fn validate_storage_limit<T>(
-    max_buffer_size: u64,
-    max_workgroups_per_dimension: u32,
-    volume_elements: usize,
-    dimensions: [usize; 3],
-    strategies: [AxisStrategy; 3],
-) -> Result<Option<usize>> {
-    for (name, value) in [
-        ("x extent", dimensions[0]),
-        ("y extent", dimensions[1]),
-        ("z extent", dimensions[2]),
-    ] {
-        dimension(value, name)?;
-    }
-    let workspace_elements = [
-        axis_workspace_elements(dimensions, Axis::X, strategies[0])?,
-        axis_workspace_elements(dimensions, Axis::Y, strategies[1])?,
-        axis_workspace_elements(dimensions, Axis::Z, strategies[2])?,
-    ]
-    .into_iter()
-    .flatten()
-    .max();
-    let radix_root_length = radix_root_length(dimensions, strategies);
-    let radix_twiddle_elements = if radix_root_length > 0 {
-        radix_root_length
-            .checked_add(
-                usize::try_from(radix_root_length.trailing_zeros())
-                    .expect("invariant: a usize trailing-zero count fits usize")
-                    + 1,
-            )
-            .ok_or_else(|| invalid("radix twiddle element count overflows"))?
-    } else {
-        0
-    };
-    let fused_twiddle_elements = if strategies.contains(&AxisStrategy::FusedRadix2) {
-        FUSED_MAX_LENGTH
-            .checked_add(
-                usize::try_from(FUSED_MAX_LENGTH.ilog2())
-                    .expect("invariant: a usize logarithm fits usize")
-                    + 1,
-            )
-            .ok_or_else(|| invalid("fused twiddle element count overflows"))?
-    } else {
-        0
-    };
-    if let Some(workspace_elements) = workspace_elements
-        && workspace_elements > u32::MAX as usize
-    {
-        return Err(invalid(format!(
-            "FFT workspace element count {workspace_elements} exceeds the shader u32 address domain"
-        )));
-    }
-    for (name, elements) in core::iter::once(("volume", volume_elements))
-        .chain(workspace_elements.map(|workspace| ("workspace", workspace)))
-        .chain((radix_root_length > 0).then_some(("radix twiddle", radix_twiddle_elements)))
-        .chain(
-            strategies
-                .contains(&AxisStrategy::FusedRadix2)
-                .then_some(("fused twiddle", fused_twiddle_elements)),
-        )
-    {
-        let bytes = u64::try_from(elements)
-            .map_err(|_| invalid(format!("FFT {name} element count exceeds u64")))?
-            .checked_mul(core::mem::size_of::<T>() as u64)
-            .ok_or_else(|| invalid(format!("FFT {name} byte count overflows")))?;
-        if bytes > max_buffer_size {
-            return Err(invalid(format!(
-                "FFT {name} requires {bytes} bytes, exceeding device max_buffer_size={max_buffer_size}"
-            )));
-        }
-    }
-    if let Some(workspace_elements) = workspace_elements {
-        let workgroups = workspace_elements.div_ceil(WORKGROUP_SIZE as usize);
-        if workgroups > max_workgroups_per_dimension as usize {
-            return Err(invalid(format!(
-                "FFT dispatch requires {workgroups} x workgroups, exceeding device max_compute_workgroups_per_dimension={max_workgroups_per_dimension}"
-            )));
-        }
-    }
-    Ok(workspace_elements)
 }
 
 fn radix_stages(
@@ -343,61 +135,15 @@ impl<T: WgpuFftScalar> WgpuFftPlan<T> {
         real: WgpuBuffer<T>,
         imaginary: WgpuBuffer<T>,
     ) -> Result<Self> {
-        let mut dimensions = [1usize; 3];
-        dimensions[..R].copy_from_slice(&plan.shape);
-        let axes = [Axis::X, Axis::Y, Axis::Z];
-        let limits = device.device_limits();
-        let max_workgroups_per_dimension =
-            device.inner().limits().max_compute_workgroups_per_dimension;
-        if limits.max_compute_workgroup_size_x < WORKGROUP_SIZE
-            || limits.max_compute_invocations_per_workgroup < WORKGROUP_SIZE
-        {
-            return Err(invalid(format!(
-                "FFT kernels require {WORKGROUP_SIZE} x invocations; device reports max x={} and max invocations={}",
-                limits.max_compute_workgroup_size_x, limits.max_compute_invocations_per_workgroup
-            )));
-        }
-        let mut batch = [0u32; 3];
-        for (index, axis) in axes.into_iter().enumerate() {
-            batch[index] = dimension(
-                axis.batch_count(dimensions)
-                    .ok_or_else(|| invalid("FFT axis batch count overflows"))?,
-                "axis batch count",
-            )?;
-        }
-        let mut active_axes = [false; 3];
-        active_axes[..R].copy_from_slice(&plan.active_axes);
-        let strategy = [
-            select_axis_strategy(
-                active_axes[0],
-                dimensions[0],
-                batch[0],
-                limits,
-                max_workgroups_per_dimension,
-            )?,
-            select_axis_strategy(
-                active_axes[1],
-                dimensions[1],
-                batch[1],
-                limits,
-                max_workgroups_per_dimension,
-            )?,
-            select_axis_strategy(
-                active_axes[2],
-                dimensions[2],
-                batch[2],
-                limits,
-                max_workgroups_per_dimension,
-            )?,
-        ];
-        let radix_root_length = radix_root_length(dimensions, strategy);
-        let workspace_elements = validate_storage_limit::<T>(
-            limits.max_buffer_size,
-            max_workgroups_per_dimension,
-            plan.elements,
+        let Sizing {
             dimensions,
+            batch,
             strategy,
-        )?;
+            radix_root_length,
+            workspace_elements,
+            ..
+        } = Sizing::for_device::<T, R>(device, &plan)?;
+        let axes = [Axis::X, Axis::Y, Axis::Z];
         let pipelines = FftPipelines::new(device)?;
 
         let mut pack = [PackParams::zeroed(); 3];

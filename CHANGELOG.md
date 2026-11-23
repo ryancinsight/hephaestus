@@ -1,5 +1,15 @@
 # Changelog
 
+## [0.32.0] - Release candidate
+
+### Breaking
+
+- [major] Use published Aequitas 0.5 and Leto 0.52 with the typed FFT
+  resource preflight. Kwavers can validate enabled device limits before
+  allocating accelerator buffers. Use `hephaestus-core`, `hephaestus-wgpu`,
+  and `hephaestus-cuda` at 0.32.0 when sharing the same backend types.
+  See [ADR 0090](docs/adr/0090-fft-resource-preflight.md).
+
 ## [0.30.0] - 2026-11-20
 
 ### Breaking
