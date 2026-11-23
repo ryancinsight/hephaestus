@@ -639,7 +639,7 @@ dependencies = [
 
 [[package]]
 name = "hephaestus-metal"
-version = "0.30.0"
+version = "0.32.0"
 dependencies = [
  "aequitas",
  "eunomia",
@@ -668,7 +668,7 @@ dependencies = [
 
 [[package]]
 name = "hephaestus-rocm"
-version = "0.30.0"
+version = "0.32.0"
 dependencies = [
  "aequitas",
  "cubecl-hip-sys",

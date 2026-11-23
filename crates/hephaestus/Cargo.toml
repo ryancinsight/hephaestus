@@ -34,8 +34,8 @@ hephaestus-core = { path = "../hephaestus-core", version = "0.32.0", default-fea
 # machine; these features govern what is compiled in, not what is chosen.
 hephaestus-wgpu = { path = "../hephaestus-wgpu", version = "0.32.0", default-features = false, optional = true }
 hephaestus-cuda = { path = "../hephaestus-cuda", version = "0.32.0", default-features = false, optional = true }
-hephaestus-rocm = { path = "../hephaestus-rocm", version = "0.30.0", default-features = false, optional = true }
-hephaestus-metal = { path = "../hephaestus-metal", version = "0.30.0", default-features = false, optional = true }
+hephaestus-rocm = { path = "../hephaestus-rocm", version = "0.32.0", default-features = false, optional = true }
+hephaestus-metal = { path = "../hephaestus-metal", version = "0.32.0", default-features = false, optional = true }
 
 [features]
 # No backend by default: the contract layer alone compiles everywhere, and a

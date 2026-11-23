@@ -29,8 +29,8 @@ hephaestus-conformance = { path = "crates/hephaestus-conformance" }
 hephaestus-core = { version = "0.32.0", path = "crates/hephaestus-core" }
 hephaestus-wgpu = { version = "0.32.0", path = "crates/hephaestus-wgpu" }
 hephaestus-cuda = { version = "0.32.0", path = "crates/hephaestus-cuda", default-features = false }
-hephaestus-rocm = { version = "0.30.0", path = "crates/hephaestus-rocm", default-features = false }
-hephaestus-metal = { version = "0.30.0", path = "crates/hephaestus-metal" }
+hephaestus-rocm = { version = "0.32.0", path = "crates/hephaestus-rocm", default-features = false }
+hephaestus-metal = { version = "0.32.0", path = "crates/hephaestus-metal" }
 
 # â”€â”€ GPU â”€â”€
 # Hephaestus owns the Atlas WGPU ABI; consumers pin this exact major.
