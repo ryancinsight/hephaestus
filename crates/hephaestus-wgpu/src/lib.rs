@@ -52,7 +52,7 @@ pub use application::elementwise::{
 pub use application::elementwise_seam::{PreparedElementwise, WgpuElementwiseOps};
 pub use application::embedding_seam::WgpuEmbeddingOps;
 pub use application::fdtd::{Fdtd3dKernel, WgpuFdtd3dOps};
-pub use application::fft::{WgpuFftOps, WgpuFftScalar, WgpuPreparedFft};
+pub use application::fft::{WgpuFftOps, WgpuFftRequirements, WgpuFftScalar, WgpuPreparedFft};
 pub use application::full_reduction_seam::{PreparedFullReduction, WgpuFullReductionOps};
 pub use application::fusion::WgpuFusionOps;
 pub use application::gather_seam::{WgpuGatherOps, gather_into};

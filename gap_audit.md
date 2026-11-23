@@ -2,11 +2,40 @@
 
 ## Incremental release baseline
 
-Reviewed [hephaestus-core 0.30.0](crates/hephaestus-core/Cargo.toml) at [7c69a77ce628](https://github.com/ryancinsight/hephaestus/tree/7c69a77ce6285805fb1698afdab3bc7671bd8f70). The exact version appears in the [registry](https://crates.io/crates/hephaestus-core/0.30.0). The newer [0.32.0](https://crates.io/crates/hephaestus-core/0.32.0) archive identifies source `fc9fba13e0edcaea4f322d709dfd4d292fb770cc`. Its SHA-256 `f677bdf080c40a9bf8b85c0f0b5efee81a6f8dc957b7eb6134a5e906a97dc1f0` matches the index. The release source and reviewed branch diverge. The archive side has 2 unique commits and the default branch has two. Reconcile both sides and replay the consumer before allocating another version. [Compare revisions](https://github.com/ryancinsight/hephaestus/compare/7c69a77ce6285805fb1698afdab3bc7671bd8f70...fc9fba13e0edcaea4f322d709dfd4d292fb770cc).
+The reconciled tree includes [the published source](https://github.com/ryancinsight/hephaestus/commit/fc9fba13e0edcaea4f322d709dfd4d292fb770cc) and the default-branch planning history. Each archive’s embedded source revision equals `fc9fba13e0edcaea4f322d709dfd4d292fb770cc`. Each checksum below matches its non-yanked registry entry. Compared file counts cover package-authored files, including the original manifest. Cargo-generated metadata, normalized manifests and generated package lockfiles are excluded from the byte count.
+
+| Package | SHA-256 | Files matching release source |
+| --- | --- | ---: |
+| [hephaestus-core 0.32.0](https://crates.io/crates/hephaestus-core/0.32.0) | `f677bdf080c40a9bf8b85c0f0b5efee81a6f8dc957b7eb6134a5e906a97dc1f0` | 210 |
+| [hephaestus-wgpu 0.32.0](https://crates.io/crates/hephaestus-wgpu/0.32.0) | `9dfe9ab69e923ce8afbd3ea35504e551313239843d442954e0dffd510c43e585` | 365 |
+| [hephaestus-cuda 0.32.0](https://crates.io/crates/hephaestus-cuda/0.32.0) | `ba963934dadea70f4bd0bba6f00a6ab81418eb8be60e303e6b4bc13db6519bc8` | 257 |
+
+16 selected Core/WGPU FFT tests passed. Kwavers executed four real-device allocation boundary tests and one requested-output simulation on the native WGPU adapter. [Consumer test at the reviewed revision](https://github.com/ryancinsight/kwavers/blob/a949d8d429fa3965d3ae500958c58d512bdce41f/crates/kwavers-gpu/src/pstd_gpu/tests/capacity.rs). A new external Cargo project resolved all five released provider crates from crates.io, with one Aequitas 0.5.0, Eunomia 0.12.1 and Leto 0.52.0. It checked typed time admission, both elastic moduli and FFT axis products, including invalid inputs.
+
+The previous Coeus graph mixed Core 0.32.0 with Metal and ROCm built on Core 0.30.0. The ROCm device failed the shared trait bound (E0277). [Apollo](https://github.com/ryancinsight/apollo/pull/728) and [Coeus](https://github.com/ryancinsight/Coeus/pull/690) resolve only the published Core 0.32.0 in clean external callers pinned to the verified Apollo merge and Coeus candidate `f649930c49da`.
+
+### Metal and ROCm 0.32.0 publication
+
+Both registry archives identify the verified [release source](https://github.com/ryancinsight/hephaestus/commit/473c8caa552a0713c404ad9924a042c9affc1aa8). Each non-yanked index checksum matches the downloaded crate. The normalized manifests select Core 0.32.0 and Metal also selects WGPU 0.32.0.
+
+| Crate | Published SHA-256 | Package-authored files verified |
+| --- | --- | ---: |
+| [hephaestus-metal 0.32.0](https://github.com/ryancinsight/hephaestus/releases/tag/crate-hephaestus-metal-v0.32.0) | `33cf59b465dc4f1e3c9ce47c8ba85f2e4c780b657335c61f8107cae7dbf393f6` | 144 |
+| [hephaestus-rocm 0.32.0](https://github.com/ryancinsight/hephaestus/releases/tag/crate-hephaestus-rocm-v0.32.0) | `0af8829be91d7ca939b40907f0862648083d0d64ee2c93589ee317255510afb0` | 220 |
+
+Both default APIs passed 223 patch-level compatibility checks against 0.30.0. The 142 Metal and 218 ROCm source, kernel, build and test files match the previous archives byte for byte. On Apple silicon, 102 provider tests passed with Metal device acquisition required. ROCm passed 89 portable tests and the Linux SDK/adapterless workflow. AMD hardware execution remains open for that target’s V1 qualification. The Coeus workspace and all targets compile against the published graph with one device trait identity.
 
 The next [patch] checkpoint uses [sparse](crates/hephaestus-metal/tests/contract/sparse.rs). [Target version and acceptance criteria](backlog.md#hephaestus-stable-qualification).
 
 The Atlas board check reports 4 existing schema findings, including `HEPHAESTUS-SCAN-LETO-001`. Verify each item against its delivery evidence, archive completed work and rerun the board check before the freeze.
+
+## Aequitas 0.5 FFT capacity provider [major]
+
+Kwavers uses the typed resource preflight added in 0.31.0. The 0.31.0
+archives use Leto 0.51 and Aequitas 0.4. The checked 0.32.0 candidate
+uses the same sizing path with the registry Leto 0.52 and Aequitas 0.5
+providers. A compile check against 0.30.0 reproduces the missing method
+and typed error variant.
 
 ## [HEPH-EUNOMIA-010-COHORT] Default-source graph [minor]
 

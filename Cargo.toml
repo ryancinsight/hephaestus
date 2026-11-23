@@ -26,11 +26,11 @@ categories = ["science", "hardware-support"]
 [workspace.dependencies]
 # â”€â”€ Local Workspace Crates â”€â”€
 hephaestus-conformance = { path = "crates/hephaestus-conformance" }
-hephaestus-core = { version = "0.30.0", path = "crates/hephaestus-core" }
-hephaestus-wgpu = { version = "0.30.0", path = "crates/hephaestus-wgpu" }
-hephaestus-cuda = { version = "0.30.0", path = "crates/hephaestus-cuda", default-features = false }
-hephaestus-rocm = { version = "0.30.0", path = "crates/hephaestus-rocm", default-features = false }
-hephaestus-metal = { version = "0.30.0", path = "crates/hephaestus-metal" }
+hephaestus-core = { version = "0.32.0", path = "crates/hephaestus-core" }
+hephaestus-wgpu = { version = "0.32.0", path = "crates/hephaestus-wgpu" }
+hephaestus-cuda = { version = "0.32.0", path = "crates/hephaestus-cuda", default-features = false }
+hephaestus-rocm = { version = "0.32.0", path = "crates/hephaestus-rocm", default-features = false }
+hephaestus-metal = { version = "0.32.0", path = "crates/hephaestus-metal" }
 
 # â”€â”€ GPU â”€â”€
 # Hephaestus owns the Atlas WGPU ABI; consumers pin this exact major.
@@ -68,15 +68,15 @@ eunomia = { version = "0.12.1", default-features = false }
 # leto host-side layout metadata (shape/strides/offset + broadcast) reused as
 # the backend-agnostic indexing vocabulary per atlas ADR 0001. Layout/array
 # types are shared with the operation layer below.
-leto = { version = "0.52.0", git = "https://github.com/ryancinsight/leto.git", default-features = false, features = ["std", "parallel", "mnemosyne-memory"] }
+leto = { version = "0.52.0", default-features = false, features = ["std", "parallel", "mnemosyne-memory"] }
 # themis placement/topology law (atlas ADR 0002): hephaestus is the provider
 # that reports device properties into themis GpuTopology snapshots. The package
 # published as themis-topology; the extern crate name remains themis.
-themis = { package = "themis-topology", version = "0.11.1", git = "https://github.com/ryancinsight/themis", default-features = false, features = ["std"] }
+themis = { package = "themis-topology", version = "0.11.5", default-features = false, features = ["std"] }
 # Keep the operation layer on the same default Leto source identity as the
 # metadata layer.
-leto-ops = { version = "0.52.0", git = "https://github.com/ryancinsight/leto.git", default-features = false, features = ["std", "mnemosyne-memory", "topology"] }
-moirai-sync = { version = "0.12.0", git = "https://github.com/ryancinsight/Moirai.git" }
+leto-ops = { version = "0.52.0", default-features = false, features = ["std", "mnemosyne-memory", "topology"] }
+moirai-sync = { version = "0.12.0" }
 # â”€â”€ Python FFI â”€â”€
 # Rust tests embed Python; Maturin >= 1.9.4 selects extension-only linking
 # through PYO3_BUILD_EXTENSION_MODULE for wheel builds.

@@ -98,3 +98,4 @@
 | [0087](0087-embedding-table-scatter-add-seam.md) | Embedding-table scatter-add backward seam | Accepted |
 | [0088](0088-release-scope-1-0.md) | Hephaestus release scope for 1.0 | Accepted |
 | [0089](0089-published-provider-boundary.md) | Version the Leto 0.51 accelerator boundary | Accepted |
+| [0090](0090-fft-resource-preflight.md) | Allocation-free FFT capacity preflight | Accepted |

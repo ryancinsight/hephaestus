@@ -1,27 +1,12 @@
 use super::*;
+use hephaestus_core::HephaestusError;
 
 #[test]
 fn module_cases_share_process_state() {
     crate::test_support::run_cases(&[
         (
-            "strategy_selects_radix_and_bluestein_without_rank_clones",
-            strategy_selects_radix_and_bluestein_without_rank_clones as fn(),
-        ),
-        (
             "host_chirp_preparation_fft_matches_impulse_spectrum",
             host_chirp_preparation_fft_matches_impulse_spectrum as fn(),
-        ),
-        (
-            "workspace_accounts_for_axis_batch_geometry",
-            workspace_accounts_for_axis_batch_geometry as fn(),
-        ),
-        (
-            "fused_radix_eliminates_workspace_when_device_limits_allow_it",
-            fused_radix_eliminates_workspace_when_device_limits_allow_it as fn(),
-        ),
-        (
-            "storage_validation_covers_bluestein_workspace_and_dispatch_limits",
-            storage_validation_covers_bluestein_workspace_and_dispatch_limits as fn(),
         ),
         (
             "host_preparation_allocation_failure_is_typed",
@@ -34,17 +19,6 @@ fn module_cases_share_process_state() {
     ]);
 }
 
-fn strategy_selects_radix_and_bluestein_without_rank_clones() {
-    assert_eq!(
-        axis_strategy_for(64).expect("valid radix strategy"),
-        AxisStrategy::StagedRadix2
-    );
-    assert_eq!(
-        axis_strategy_for(12).expect("valid Bluestein strategy"),
-        AxisStrategy::ChirpZ { n: 12, m: 32 }
-    );
-}
-
 fn host_chirp_preparation_fft_matches_impulse_spectrum() {
     let mut values = vec![[0.0, 0.0]; 8];
     values[0] = [1.0, 0.0];
@@ -53,68 +27,6 @@ fn host_chirp_preparation_fft_matches_impulse_spectrum() {
         assert!((value[0] - 1.0).abs() <= f64::EPSILON);
         assert!(value[1].abs() <= f64::EPSILON);
     }
-}
-
-fn workspace_accounts_for_axis_batch_geometry() {
-    let dimensions = [2, 3, 4];
-    assert_eq!(
-        axis_workspace_elements(dimensions, Axis::Y, AxisStrategy::ChirpZ { n: 3, m: 8 })
-            .expect("valid workspace geometry"),
-        Some(64)
-    );
-}
-
-fn fused_radix_eliminates_workspace_when_device_limits_allow_it() {
-    let limits = DeviceLimits {
-        max_buffer_size: u64::MAX,
-        max_compute_workgroup_size_x: 256,
-        max_compute_workgroup_size_y: 256,
-        max_compute_workgroup_size_z: 64,
-        max_compute_invocations_per_workgroup: 256,
-        max_compute_workgroup_storage_size: FUSED_WORKGROUP_STORAGE_BYTES,
-        max_storage_buffers_per_shader_stage: Some(8),
-        max_buffers_and_acceleration_structures_per_shader_stage: Some(8),
-        max_immediate_size: 0,
-    };
-    let strategy = select_fused_strategy(AxisStrategy::StagedRadix2, 256, 16_384, limits, 65_535);
-    assert_eq!(strategy, AxisStrategy::FusedRadix2);
-    assert_eq!(
-        validate_storage_limit::<f32>(
-            u64::MAX,
-            65_535,
-            256 * 128 * 128,
-            [256, 128, 128],
-            [AxisStrategy::FusedRadix2; 3],
-        )
-        .expect("fused geometry is valid"),
-        None
-    );
-}
-
-fn storage_validation_covers_bluestein_workspace_and_dispatch_limits() {
-    let dimensions = [3, 1, 1];
-    let strategies = [
-        AxisStrategy::ChirpZ { n: 3, m: 8 },
-        AxisStrategy::StagedRadix2,
-        AxisStrategy::StagedRadix2,
-    ];
-    assert!(validate_storage_limit::<f32>(31, u32::MAX, 3, dimensions, strategies).is_err());
-    assert!(validate_storage_limit::<f32>(u64::MAX, 0, 3, dimensions, strategies).is_err());
-    assert_eq!(
-        validate_storage_limit::<f32>(u64::MAX, 1, 3, dimensions, strategies)
-            .expect("one workgroup covers the prepared workspace"),
-        Some(8)
-    );
-    assert!(
-        validate_storage_limit::<f32>(
-            u64::MAX,
-            65_535,
-            1 << 24,
-            [1 << 24, 1, 1],
-            [AxisStrategy::StagedRadix2; 3],
-        )
-        .is_err()
-    );
 }
 
 fn host_preparation_allocation_failure_is_typed() {

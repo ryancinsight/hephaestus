@@ -42,16 +42,18 @@ pub(super) fn radix_parameters(root_length: usize, fft_len: u32) -> Result<(u32,
     Ok((root_half, scale_index))
 }
 
+pub(super) fn twiddle_elements(root_length: usize) -> Result<usize> {
+    debug_assert!(root_length.is_power_of_two());
+    // There are root_length / 2 cosine values, as many sine values, and one
+    // reciprocal for each radix level including the identity scale.
+    let scale_count = root_length.trailing_zeros() as usize + 1;
+    root_length
+        .checked_add(scale_count)
+        .ok_or_else(|| invalid("FFT twiddle element count overflows"))
+}
+
 pub(super) fn build_fused_twiddle<T: WgpuFftScalar>(device: &WgpuDevice) -> Result<WgpuBuffer<T>> {
-    let scale_count = usize::try_from(FUSED_MAX_LENGTH.ilog2())
-        .expect("invariant: a usize logarithm fits usize")
-        + 1;
-    let mut roots = try_host_vector(
-        FUSED_MAX_LENGTH
-            .checked_add(scale_count)
-            .ok_or_else(|| invalid("fused twiddle element count overflows"))?,
-        "fused twiddle",
-    )?;
+    let mut roots = try_host_vector(twiddle_elements(FUSED_MAX_LENGTH)?, "fused twiddle")?;
     for index in 0..(FUSED_MAX_LENGTH / 2) {
         let angle = -core::f64::consts::TAU * index as f64 / FUSED_MAX_LENGTH as f64;
         roots.push(T::from_fft_coefficient(angle.cos()));
@@ -73,14 +75,7 @@ pub(super) fn build_radix_twiddle<T: WgpuFftScalar>(
     if root_length == 0 {
         return Ok(None);
     }
-    debug_assert!(root_length.is_power_of_two());
-    let scale_count = usize::try_from(root_length.trailing_zeros())
-        .expect("invariant: a usize trailing-zero count fits usize")
-        + 1;
-    let capacity = root_length
-        .checked_add(scale_count)
-        .ok_or_else(|| invalid("radix twiddle element count overflows"))?;
-    let mut roots = try_host_vector(capacity, "radix twiddle")?;
+    let mut roots = try_host_vector(twiddle_elements(root_length)?, "radix twiddle")?;
     for index in 0..(root_length / 2) {
         let angle = -core::f64::consts::TAU * index as f64 / root_length as f64;
         roots.push(T::from_fft_coefficient(angle.cos()));
