@@ -118,5 +118,15 @@ fn blocked_qr_tail(c: &mut Criterion) {
     measure_shape::<2048, 129>(c, &device, "blocked_qr/routing_boundary_2048x129");
 }
 
-criterion_group!(benches, blocked_qr_tail);
+criterion_group! {
+    name = benches;
+    // Flat 10-sample budget: device iterations wait for completion, so
+    // Criterion defaults would multiply the five-shape sweep (including the
+    // 2048x129 case) past the per-binary bound (ATLAS-BENCH-BUDGET-001).
+    config = Criterion::default()
+        .sample_size(10)
+        .warm_up_time(std::time::Duration::from_millis(100))
+        .measurement_time(std::time::Duration::from_millis(500));
+    targets = blocked_qr_tail
+}
 criterion_main!(benches);
