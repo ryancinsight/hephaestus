@@ -99,5 +99,15 @@ fn prepared_map_reduction(c: &mut Criterion) {
     group.finish();
 }
 
-criterion_group!(benches, prepared_map_reduction);
+criterion_group! {
+    name = benches;
+    // Flat 10-sample budget: device iterations wait for completion, so
+    // Criterion defaults would multiply the sweep past the per-binary
+    // wall-clock bound (ATLAS-BENCH-BUDGET-001) without changing a regime.
+    config = Criterion::default()
+        .sample_size(10)
+        .warm_up_time(std::time::Duration::from_millis(100))
+        .measurement_time(std::time::Duration::from_millis(500));
+    targets = prepared_map_reduction
+}
 criterion_main!(benches);
